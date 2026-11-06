@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">Legion Control Center</string>
+    <string name="service_desc">يعرض Legion Control Center بدل لوحة الإعدادات السريعة، ويظهر المساعدة الذكية فوق التطبيقات، ويستخدم للضغط على أزرار النظام وأخذ لقطة الشاشة وتقسيمها.</string>
+</resources>
