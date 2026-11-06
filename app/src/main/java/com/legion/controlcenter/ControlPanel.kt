@@ -158,7 +158,7 @@ class ControlPanel(
     init {
         layoutDirection = LAYOUT_DIRECTION_LTR
         isClickable = true
-        val girlW = if (land) girl.widthFor(dm.heightPixels) else 0
+        val girlW = if (land) girl.widthFor(dm.heightPixels) else (dm.widthPixels * 0.30f).toInt()
         val areaLeft = (girlW * 0.8f).toInt()
         val areaW = dm.widthPixels - areaLeft
         val k = areaW / 2172f
@@ -173,7 +173,7 @@ class ControlPanel(
 
         val colArea = FrameLayout(svc)
         content.addView(colArea, FrameLayout.LayoutParams(-1, -1).apply {
-            leftMargin = side; rightMargin = side; topMargin = topH; bottomMargin = botH
+            leftMargin = side + (if (land) 0 else girlW - areaLeft); rightMargin = side; topMargin = topH; bottomMargin = botH
         })
         if (!land) {
             val col = LinearLayout(svc).apply { orientation = LinearLayout.VERTICAL }
@@ -205,6 +205,7 @@ class ControlPanel(
 
         // البنت فوق كل حاجة (بتظهر كاملة من الراس للرجلين في الوضع العرضي)
         if (land) addView(girl, LayoutParams(girlW, -1, Gravity.START))
+        else addView(girl, LayoutParams(girlW, minOf(girl.heightFor(girlW), dm.heightPixels), Gravity.START or Gravity.BOTTOM))
 
         refreshers.forEach { try { it() } catch (_: Exception) {} }
         slowRefreshers.forEach { try { it() } catch (_: Exception) {} }
@@ -280,7 +281,7 @@ class ControlPanel(
             ai("تحليل صورة", R.drawable.g_image) { svc.setBubbleVisible(true); svc.assistant?.analyzeScreen() },
             ai("إجابة سريعة", R.drawable.g_bolt) { onClose(); svc.openAssistant(true) }
         )
-        btns[2].also { b -> slowRefreshers += { b.on = svc.translationOn() } }
+        btns[2].also { b -> slowRefreshers += { b.on = svc.translationOn() }; b.setOnLongClickListener { onClose(); svc.openAiSettings(); true } }
         right.addView(grid(btns, 5, 4), LinearLayout.LayoutParams(-1, -2).apply { topMargin = d(6) })
         box.addView(right, LinearLayout.LayoutParams(0, -2, 1f).apply { marginStart = d(10) })
         refreshers += { val a = svc.assistant; wave.level = a?.level ?: 0f; val act = a?.active == true; if (wave.active != act) wave.active = act }

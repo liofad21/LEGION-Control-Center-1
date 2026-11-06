@@ -27,7 +27,19 @@ class TranslationOverlay(private val svc: ControlAccessibilityService) {
 
     private val wm = svc.getSystemService(Context.WINDOW_SERVICE) as WindowManager
     private val ui = Handler(Looper.getMainLooper())
-    private val cjk = Regex("[\\u4e00-\\u9fff\\u3400-\\u4dbf]")
+    private val zhRe = Regex("[\\u4e00-\\u9fff\\u3400-\\u4dbf]")
+    private val jaRe = Regex("[\\u3040-\\u30ff\\u4e00-\\u9fff]")
+    private val koRe = Regex("[\\uac00-\\ud7af]")
+    private val allRe = Regex("[\\u3040-\\u30ff\\u4e00-\\u9fff\\u3400-\\u4dbf\\uac00-\\ud7af]")
+    private fun srcRe() = when (svc.dev.prefs.getString("translate_src", "zh")) { "ja" -> jaRe; "ko" -> koRe; "all" -> allRe; else -> zhRe }
+    private fun lang() = svc.dev.prefs.getString("translate_lang", "English") ?: "English"
+    private fun ck(t: String) = lang() + "\u0001" + t
+    private fun allowed(pkg: String): Boolean {
+        val p = svc.dev.prefs
+        return p.getBoolean("translate_all", true) || (p.getStringSet("translate_apps", emptySet()) ?: emptySet()).contains(pkg)
+    }
+    /** لما اللغة أو التطبيقات تتغيّر: امسح الرسم وارسم من جديد. */
+    fun reload() { items = emptyList(); view.invalidate(); lastRun = 0; busy = false; schedule(200) }
     private val sp = svc.getSharedPreferences("legion_tr", Context.MODE_PRIVATE)
     private val cache = object : LinkedHashMap<String, String>(512, 0.75f, true) {
         override fun removeEldestEntry(e: MutableMap.MutableEntry<String, String>?) = size > 3000
@@ -102,7 +114,7 @@ class TranslationOverlay(private val svc: ControlAccessibilityService) {
         if (n == null || depth > 45 || out.size >= 150) return
         if (!n.isVisibleToUser) return
         val t = (n.text ?: n.contentDescription)?.toString()
-        if (!t.isNullOrBlank() && cjk.containsMatchIn(t) && t.length <= 300) {
+        if (!t.isNullOrBlank() && srcRe().containsMatchIn(t) && t.length <= 300) {
             val r = Rect(); n.getBoundsInScreen(r)
             if (r.width() > 8 && r.height() > 8) out.add(Raw(r, t.trim()))
         }
@@ -118,18 +130,18 @@ class TranslationOverlay(private val svc: ControlAccessibilityService) {
         if (now - lastRun < 600) { schedule(700 - (now - lastRun)); return }
         val root = svc.rootInActiveWindow ?: return
         val pkg = root.packageName?.toString() ?: return
-        if (pkg == svc.packageName || pkg == "com.android.systemui") { items = emptyList(); view.invalidate(); view.alpha = 1f; return }
+        if (pkg == svc.packageName || pkg == "com.android.systemui" || !allowed(pkg)) { items = emptyList(); view.invalidate(); view.alpha = 1f; return }
         val raws = ArrayList<Raw>()
         collect(root, raws)
         lastRun = now
         if (raws.isEmpty()) { items = emptyList(); view.alpha = 1f; view.invalidate(); return }
-        val missing = raws.map { it.text }.filter { !cache.containsKey(it) }.distinct()
+        val missing = raws.map { it.text }.filter { !cache.containsKey(ck(it)) }.distinct()
         busy = true
         thread {
             try {
                 for (chunk in missing.chunked(60)) {
-                    val tr = svc.gemini.translate(chunk)
-                    ui.post { chunk.forEachIndexed { i, s -> cache[s] = tr[i] } }
+                    val tr = svc.gemini.translate(chunk, lang())
+                    ui.post { chunk.forEachIndexed { i, s -> cache[ck(s)] = tr[i] } }
                     Thread.sleep(50)
                 }
                 if (missing.isNotEmpty()) ui.post { queueSave() }
@@ -149,7 +161,7 @@ class TranslationOverlay(private val svc: ControlAccessibilityService) {
     }
 
     private fun paint(raws: List<Raw>) {
-        val translated = raws.filter { cache.containsKey(it.text) && cache[it.text] != it.text }
+        val translated = raws.filter { cache.containsKey(ck(it.text)) && cache[ck(it.text)] != it.text }
         if (translated.isEmpty()) { busy = false; items = emptyList(); view.alpha = 1f; view.invalidate(); return }
         // بنخفي الرسم لحظة عشان لقطة الشاشة تاخد ألوان التطبيق الأصلية
         view.alpha = 0f
@@ -158,7 +170,7 @@ class TranslationOverlay(private val svc: ControlAccessibilityService) {
                 val list = translated.map { r ->
                     val bg = if (bmp != null) sampleBg(bmp, r.rect) else Color.parseColor("#FAFAFA")
                     val lum = (0.299 * Color.red(bg) + 0.587 * Color.green(bg) + 0.114 * Color.blue(bg)) / 255
-                    Item(r.rect, cache[r.text] ?: r.text, bg, if (lum < 0.5) Color.parseColor("#F2F2F2") else Color.parseColor("#1B1B1B"))
+                    Item(r.rect, cache[ck(r.text)] ?: r.text, bg, if (lum < 0.5) Color.parseColor("#F2F2F2") else Color.parseColor("#1B1B1B"))
                 }
                 items = list
                 view.alpha = 1f; view.invalidate()

@@ -167,11 +167,11 @@ class GeminiClient(private val keyProvider: () -> String, private val actions: (
     fun jpegPart(b: ByteArray) = inline("image/jpeg", b)
 
     /** ترجمة دفعة نصوص صينية لإنجليزي. بترجّع نفس العدد بنفس الترتيب. */
-    fun translate(texts: List<String>): List<String> {
+    fun translate(texts: List<String>, target: String = "English"): List<String> {
         val arr = JSONArray(); texts.forEach { arr.put(it) }
         val body = JSONObject()
             .put("systemInstruction", JSONObject().put("parts", JSONArray().put(textPart(
-                "Translate each Chinese UI string in the JSON array into short natural English, as it would appear in an app's interface (buttons, menus, labels). " +
+                "Translate each UI string in the JSON array (written in Chinese, Japanese or Korean) into short natural $target, as it would appear in an app's interface (buttons, menus, labels). " +
                         "Keep numbers, units, emoji and Latin text unchanged. Keep it about as short as the original. Return ONLY a JSON array of strings with exactly the same length and order."))))
             .put("contents", JSONArray().put(JSONObject().put("role", "user").put("parts", JSONArray().put(textPart(arr.toString())))))
             .put("generationConfig", JSONObject().put("responseMimeType", "application/json")

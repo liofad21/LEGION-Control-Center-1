@@ -60,7 +60,7 @@ class ControlAccessibilityService : AccessibilityService() {
         refreshAssistant()
         setTranslation(dev.prefs.getBoolean("translate_on", false), persist = false)
         initThermal()
-        if (dev.prefs.getBoolean("wake_on", false) && checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+        if (dev.prefs.getBoolean("wake_on", true) && checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) == android.content.pm.PackageManager.PERMISSION_GRANTED) {
             try { WakeWordService.start(this) } catch (_: Exception) {}
         }
     }
@@ -82,7 +82,7 @@ class ControlAccessibilityService : AccessibilityService() {
     fun openAssistant(listen: Boolean) {
         hidePanel()
         setBubbleVisible(true)
-        assistant?.openChat(listen)
+        if (listen) assistant?.wakeGreet() else assistant?.openChat(false)
     }
 
     // ================= اللمس 3 مرات =================
@@ -106,8 +106,15 @@ class ControlAccessibilityService : AccessibilityService() {
         wm.addView(v, lp)
     }
 
+    private var lastTapAt = 0L
     private fun onScreenTap() {
         if (!dev.prefs.getBoolean("triple_on", true)) return
+        val t0 = System.currentTimeMillis()
+        // صباعين مع بعض (حدثين في أقل من 130ms) = اظهار Raven
+        if (t0 - lastTapAt in 1..130 && assistant?.isShowing != true) {
+            lastTapAt = 0L; taps.clear(); handler.post { setBubbleVisible(true) }; return
+        }
+        lastTapAt = t0
         if (panel != null || assistant?.isChatOpen == true || dev.gameMode()) return
         val now = System.currentTimeMillis()
         if (now - lastToggle < 1000) return
@@ -193,6 +200,14 @@ class ControlAccessibilityService : AccessibilityService() {
     fun setTranslation(on: Boolean, persist: Boolean = true) {
         if (persist) dev.prefs.edit().putBoolean("translate_on", on).apply()
         translation?.setEnabled(on)
+        assistant?.bringToFront()
+    }
+    fun translationReload() { translation?.reload() }
+    private var aiSettings: AiSettingsOverlay? = null
+    fun openAiSettings() {
+        hidePanel()
+        if (aiSettings?.isShowing == true) return
+        aiSettings = AiSettingsOverlay(this) { aiSettings = null }.also { it.show() }
         assistant?.bringToFront()
     }
     fun translationOn() = dev.prefs.getBoolean("translate_on", false)

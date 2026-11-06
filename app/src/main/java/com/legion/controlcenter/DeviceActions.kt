@@ -172,6 +172,10 @@ class DeviceActions(private val svc: ControlAccessibilityService) {
     }
 
     fun scanQr() {
+        svc.clickSystemTile(listOf("QR code scanner", "QR code", "Scan QR code", "Code scanner", "ماسح رمز الاستجابة السريعة", "رمز الاستجابة السريعة", "ماسح QR", "رمز QR")) { scanQrFallback() }
+    }
+
+    private fun scanQrFallback() {
         val tries = listOf(
             Intent(Intent.ACTION_VIEW, android.net.Uri.parse("googleapp://lens")),
             Intent("com.google.zxing.client.android.SCAN"),

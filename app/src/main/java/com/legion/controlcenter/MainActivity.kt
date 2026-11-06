@@ -104,7 +104,7 @@ class MainActivity : Activity() {
         }
         ai.put(sw("إظهار الشخصية العايمة", "bubble_visible", false) { ControlAccessibilityService.instance?.refreshAssistant() }, 10)
         ai.put(sw("لمس الشاشة 3 مرات يظهر/يخفي Raven", "triple_on", true), 6)
-        ai.put(sw("كلمة التنبيه \"RAVEN\" (سماع طول اليوم)", "wake_on", false) { on ->
+        ai.put(sw("كلمة التنبيه \"RAVEN\" (سماع طول اليوم)", "wake_on", true) { on ->
             if (on) {
                 if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
                     requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO, Manifest.permission.POST_NOTIFICATIONS), 2)
@@ -112,7 +112,11 @@ class MainActivity : Activity() {
             } else WakeWordService.stop(this)
         }, 6)
         ai.put(tv("بتشغّل خدمة بإشعار دائم (أندرويد بيطلبه لأي تطبيق بيستخدم المايك في الخلفية). بتحتاج خدمة التعرف على الكلام بتاعة جوجل، وبتفضل شغّالة طول ما التطبيق مش متقفل بالقوة.", 11f, false, Ui.TEXT_DIM), 2)
-        ai.put(sw("ترجمة التطبيقات الصينية للإنجليزي", "translate_on", false) { ControlAccessibilityService.instance?.setTranslation(it) }, 6)
+        ai.put(action("إعدادات الـ AI: اللغة والتطبيقات المترجمة", true) {
+            val sv = ControlAccessibilityService.instance
+            if (sv != null) sv.openAiSettings() else Toast.makeText(this, "فعّل خدمة إمكانية الوصول الأول", Toast.LENGTH_SHORT).show()
+        }, 8, d(44))
+        ai.put(sw("ترجمة التطبيقات (صيني/ياباني/كوري)", "translate_on", false) { ControlAccessibilityService.instance?.setTranslation(it) }, 6)
         ai.put(sw("إدارة الحرارة التلقائية (تنزيل التحديث + تنبيه)", "auto_thermal", true), 6)
         ai.put(sw("Raven ترد بصوتها", "voice_replies", true), 6)
         ai.put(action("صلاحية المايك (للتحدث)") {
@@ -176,6 +180,8 @@ class MainActivity : Activity() {
         // محتوى متوسّط العرض على التابلت
         val wrap = FrameLayout(this)
         wrap.addView(col, FrameLayout.LayoutParams(minOf(d(620), resources.displayMetrics.widthPixels), -2, Gravity.CENTER_HORIZONTAL))
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED)
+            requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO, Manifest.permission.POST_NOTIFICATIONS), 1)
         setContentView(ScrollView(this).apply { setBackgroundColor(Color.BLACK); addView(wrap) })
     }
 
@@ -185,12 +191,12 @@ class MainActivity : Activity() {
 
     override fun onRequestPermissionsResult(code: Int, perms: Array<out String>, res: IntArray) {
         super.onRequestPermissionsResult(code, perms, res)
-        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED && prefs.getBoolean("wake_on", false)) startWake()
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED && prefs.getBoolean("wake_on", true)) startWake()
     }
 
     override fun onResume() {
         super.onResume(); refreshers.forEach { it() }; updateSummary()
-        if (prefs.getBoolean("wake_on", false) && !WakeWordService.isRunning() &&
+        if (prefs.getBoolean("wake_on", true) && !WakeWordService.isRunning() &&
             checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) startWake()
     }
 

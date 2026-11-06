@@ -165,6 +165,7 @@ class GirlView(ctx: Context) : View(ctx) {
     init { isClickable = false; isFocusable = false }
     /** عرضها بالبكسل لو رسمناها بطول الشاشة كله. */
     fun widthFor(h: Int): Int = (h * bmp.width.toFloat() / bmp.height).toInt()
+    fun heightFor(w: Int): Int = (w * bmp.height.toFloat() / bmp.width).toInt()
     override fun onDraw(c: Canvas) {
         val h = height.toFloat(); val w = h * bmp.width / bmp.height
         d.set(0f, 0f, w, h)

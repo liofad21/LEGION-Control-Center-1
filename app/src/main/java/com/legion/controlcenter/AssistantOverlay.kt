@@ -89,6 +89,8 @@ class AssistantOverlay(private val svc: ControlAccessibilityService, private val
             y = prefs.getInt("bubble_y", m.heightPixels / 2).coerceIn(0, maxOf(0, m.heightPixels - size))
         }
         var sx = 0f; var sy = 0f; var ox = 0; var oy = 0; var moved = false
+        var lastTap = 0L
+        val pendingChat = Runnable { toggleChat() }
         img.setOnTouchListener { _, e ->
             when (e.actionMasked) {
                 MotionEvent.ACTION_DOWN -> { sx = e.rawX; sy = e.rawY; ox = lp.x; oy = lp.y; moved = false }
@@ -103,7 +105,13 @@ class AssistantOverlay(private val svc: ControlAccessibilityService, private val
                 }
                 MotionEvent.ACTION_UP -> {
                     if (moved) prefs.edit().putInt("bubble_x", lp.x).putInt("bubble_y", lp.y).apply()
-                    else toggleChat()
+                    else {
+                        val now = android.os.SystemClock.uptimeMillis()
+                        if (now - lastTap < 400) {            // دوسة مرتين = اخفاء
+                            lastTap = 0L; img.removeCallbacks(pendingChat)
+                            svc.setBubbleVisible(false)
+                        } else { lastTap = now; img.postDelayed(pendingChat, 400) }
+                    }
                 }
             }
             true
@@ -135,6 +143,20 @@ class AssistantOverlay(private val svc: ControlAccessibilityService, private val
     }
 
     // ================= الشات =================
+    /** لما حد ينادي "Raven": تفتح وتقول ترحيب وتسمع على طول (زي Gemini). */
+    fun wakeGreet() {
+        if (bubble == null) show()
+        if (chat == null) buildChat()
+        if (recording) return
+        val g = "أيوة ريو، أقدر أساعدك إزاي؟"
+        say("Raven", g)
+        WakeWordService.pause()
+        thread {
+            speak(g)
+            ui.post { if (chat != null) listen(Task.CHAT) else WakeWordService.resume() }
+        }
+    }
+
     fun toggleChat() { if (chat == null) openChat() else closeChat() }
 
     fun openChat(listenNow: Boolean = false, task: Task = Task.CHAT) {
@@ -159,9 +181,27 @@ class AssistantOverlay(private val svc: ControlAccessibilityService, private val
             text = "Raven"; setTextColor(Color.WHITE); textSize = 16f; setPadding(svc.dpi(10), 0, 0, 0)
             typeface = Typeface.create("sans-serif-medium", Typeface.ITALIC)
         }, LinearLayout.LayoutParams(0, -2, 1f))
+        val gear = GlassButton(svc, GlassButton.Shape.FLAT, Glyphs.get(svc, R.drawable.g_settings)).apply { setOnClickListener { svc.openAiSettings() } }
+        head.addView(gear, LinearLayout.LayoutParams(svc.dpi(36), svc.dpi(36)))
         val x = GlassButton(svc, GlassButton.Shape.FLAT, Glyphs.get(svc, R.drawable.g_close)).apply { setOnClickListener { closeChat() } }
         head.addView(x, LinearLayout.LayoutParams(svc.dpi(36), svc.dpi(36)))
         root.addView(head)
+        val chipRow = LinearLayout(svc).apply { gravity = Gravity.CENTER_VERTICAL }
+        fun chip(t: String, f: () -> Unit) = chipRow.addView(GlassButton(svc, GlassButton.Shape.PILL, null, t).apply { setOnClickListener { f() } },
+            LinearLayout.LayoutParams(svc.dpi(104), svc.dpi(38)).apply { marginEnd = svc.dpi(6) })
+        chip("تلخيص الشاشة") { summarizeScreen() }
+        chip("تحليل صورة") { analyzeScreen() }
+        chip("ترجمة التطبيق") {
+            val on = !svc.translationOn(); svc.setTranslation(on)
+            say("Raven", if (on) "الترجمة شغّالة. افتح التطبيق وهتلاقيه مترجم. الإعدادات (⚙) فيها اللغة والتطبيقات." else "الترجمة اتقفلت.")
+        }
+        chip("إجابة سريعة") { listen(Task.CHAT) }
+        chip("تفريغ صوتي") { listen(Task.TRANSCRIBE) }
+        chip("مساعد مكالمات") { listen(Task.CALL) }
+        chip("مساعد دراسة") { startStudy() }
+        chip("إعدادات AI") { svc.openAiSettings() }
+        root.addView(android.widget.HorizontalScrollView(svc).apply { isHorizontalScrollBarEnabled = false; addView(chipRow) },
+            LinearLayout.LayoutParams(-1, svc.dpi(42)).apply { topMargin = svc.dpi(8) })
         val sv = ScrollView(svc).apply { isVerticalScrollBarEnabled = false }
         val tv = TextView(svc).apply { setTextColor(Color.parseColor("#FFEBDADA")); textSize = 14f; setLineSpacing(0f, 1.2f); setTextIsSelectable(true) }
         sv.addView(tv)
