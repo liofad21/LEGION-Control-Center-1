@@ -36,7 +36,8 @@ class TranslationOverlay(private val svc: ControlAccessibilityService) {
     private fun ck(t: String) = lang() + "\u0001" + t
     private fun allowed(pkg: String): Boolean {
         val p = svc.dev.prefs
-        return p.getBoolean("translate_all", true) || (p.getStringSet("translate_apps", emptySet()) ?: emptySet()).contains(pkg)
+        val set = p.getStringSet("translate_apps", emptySet()) ?: emptySet()
+        return if (set.isEmpty()) p.getBoolean("translate_all", true) else set.contains(pkg)
     }
     /** لما اللغة أو التطبيقات تتغيّر: امسح الرسم وارسم من جديد. */
     fun reload() { items = emptyList(); view.invalidate(); lastRun = 0; busy = false; schedule(200) }
@@ -58,7 +59,7 @@ class TranslationOverlay(private val svc: ControlAccessibilityService) {
             for (it in items) {
                 val r = it.rect
                 bgP.color = it.bg
-                c.drawRect(r.left - 2f, r.top - 1f, r.right + 2f, r.bottom + 1f, bgP)
+                c.drawRect(r.left - svc.dpf(6f), r.top - svc.dpf(4f), r.right + svc.dpf(6f), r.bottom + svc.dpf(4f), bgP)
                 tp.color = it.fg
                 val w = max(1, r.width())
                 var size = (r.height() * 0.62f).coerceIn(svc.dpf(9f), svc.dpf(22f))

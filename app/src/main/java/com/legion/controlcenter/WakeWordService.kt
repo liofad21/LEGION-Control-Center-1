@@ -45,12 +45,17 @@ class WakeWordService : Service() {
     private var lastWake = 0L
     private var fails = 0
     private var langIdx = 0
+    private var lock: android.os.PowerManager.WakeLock? = null
 
     override fun onBind(i: Intent?): IBinder? = null
 
     override fun onCreate() {
         super.onCreate()
         inst = this
+        try {
+            val pm = getSystemService(POWER_SERVICE) as android.os.PowerManager
+            lock = pm.newWakeLock(android.os.PowerManager.PARTIAL_WAKE_LOCK, "raven:wake").apply { setReferenceCounted(false); acquire() }
+        } catch (_: Exception) {}
         val nm = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
         if (Build.VERSION.SDK_INT >= 26) nm.createNotificationChannel(NotificationChannel(CH, "Raven wake word", NotificationManager.IMPORTANCE_MIN))
         val pi = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
@@ -123,6 +128,7 @@ class WakeWordService : Service() {
         inst = null
         ui.removeCallbacksAndMessages(null)
         rec?.destroy(); rec = null
+        try { lock?.release() } catch (_: Exception) {}
         super.onDestroy()
     }
 }

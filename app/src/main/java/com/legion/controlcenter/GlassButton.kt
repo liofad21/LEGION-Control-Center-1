@@ -131,7 +131,7 @@ class GlassButton(
         if (label.isEmpty()) { layout = null; return }
         textPaint.textSize = when (shape) {
             Shape.ORB -> context.dpf(11f)
-            Shape.CARD -> context.dpf(11f)
+            Shape.CARD -> context.dpf(12f)
             Shape.WIDE -> context.dpf(13f)
             else -> context.dpf(13f)
         }
@@ -189,7 +189,7 @@ class GlassButton(
             when (shape) {
                 Shape.ORB -> { s = body.width() * 0.52f; cx = body.centerX(); cy = body.centerY() }
                 Shape.WIDE -> { s = context.dpf(26f); cx = body.left + context.dpf(26f); cy = body.centerY() }
-                Shape.CARD -> { s = context.dpf(26f); cx = body.centerX(); cy = body.top + body.height() * 0.28f }
+                Shape.CARD -> { s = context.dpf(30f); cx = body.centerX(); cy = body.top + body.height() * 0.28f }
                 else -> { s = min(width, height) * 0.62f; cx = width / 2f; cy = height / 2f }
             }
             val ar = g.width.toFloat() / g.height

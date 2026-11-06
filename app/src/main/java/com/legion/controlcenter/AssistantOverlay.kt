@@ -267,8 +267,8 @@ class AssistantOverlay(private val svc: ControlAccessibilityService, private val
             say("Raven", "محتاجة مفتاح Gemini API. افتح تطبيق Legion Control Center وحطه في خانة Raven.")
             return true
         }
-        if (!k.startsWith("AIza") || k.length < 30) {
-            say("Raven", "المفتاح المحفوظ مش مفتاح Gemini صحيح (لازم يبدأ بـ AIza). افتح التطبيق، امسح الخانة وحط المفتاح من aistudio.google.com.")
+        if (k.length < 20) {
+            say("Raven", "المفتاح المحفوظ مش مفتاح Gemini صحيح (قصير أو ناقص). افتح التطبيق، امسح الخانة وحط المفتاح من aistudio.google.com.")
             return true
         }
         return false

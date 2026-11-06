@@ -95,8 +95,8 @@ class MainActivity : Activity() {
         ai.put(key, 10, d(48))
         ai.put(action("حفظ المفتاح") {
             val k = key.text.toString().filter { !it.isWhitespace() }
-            if (!k.startsWith("AIza") || k.length < 30) {
-                Toast.makeText(this, "ده مش مفتاح Gemini صحيح. لازم يبدأ بـ AIza", Toast.LENGTH_LONG).show()
+            if (k.length < 20) {
+                Toast.makeText(this, "المفتاح قصير أو ناقص. انسخه كامل من aistudio.google.com", Toast.LENGTH_LONG).show()
             } else {
                 prefs.edit().putString("gemini_key", k).apply()
                 Toast.makeText(this, "تم الحفظ", Toast.LENGTH_SHORT).show()
@@ -104,8 +104,9 @@ class MainActivity : Activity() {
         }, 8, d(44))
         ai.put(tv("المفتاح مجاني من aistudio.google.com ← Get API key، وبيتخزّن على التابلت بس.", 12f, false, Ui.TEXT_DIM), 6)
         fun sw(label: String, pref: String, def: Boolean, onChange: (Boolean) -> Unit = {}): Switch = Switch(this).apply {
-            text = label; setTextColor(Color.WHITE); isChecked = prefs.getBoolean(pref, def)
-            setOnCheckedChangeListener { _, v -> prefs.edit().putBoolean(pref, v).apply(); onChange(v) }
+            fun lbl(v: Boolean) = "$label — " + if (v) "مفعّل ✓" else "مقفول"
+            setTextColor(Color.WHITE); isChecked = prefs.getBoolean(pref, def); text = lbl(isChecked)
+            setOnCheckedChangeListener { _, v -> prefs.edit().putBoolean(pref, v).apply(); text = lbl(v); onChange(v) }
         }
         ai.put(sw("إظهار الشخصية العايمة", "bubble_visible", false) { ControlAccessibilityService.instance?.refreshAssistant() }, 10)
         ai.put(sw("لمس الشاشة 3 مرات يظهر/يخفي Raven", "triple_on", true), 6)
@@ -131,17 +132,24 @@ class MainActivity : Activity() {
         }, 8, d(44))
         col.put(ai, 14)
 
-        // ---- الشخصية ----
+        // ---- تخصيص صورة اللوحة ----
         val gc = card()
-        gc.addView(tv("شخصية اللوحة", 16f, true))
-        gc.put(tv("غيّر الشخصية اللي على الشمال: اختار صورة PNG من غير خلفية (شفافة). بعدها افتح اللوحة واضغط \"تعديل الشخصية\" عشان تكبّرها وتحرّكها.", 13f, false, Ui.TEXT_DIM), 6)
-        gc.put(action("اختيار صورة جديدة") { pickGirl() }, 10, d(44))
-        gc.put(action("الرجوع للشخصية الأصلية", false) {
+        gc.addView(tv("تخصيص صورة اللوحة", 16f, true))
+        gc.put(tv("ارفع أي صورة تحبها عشان تظهر في اللوحة (الأفضل PNG من غير خلفية). بعدها افتح اللوحة واضغط \"تخصيص\" عشان تحرّكها وتتحكم في عرضها وطولها.", 13f, false, Ui.TEXT_DIM), 6)
+        gc.put(action("اختيار صورة") { pickGirl() }, 10, d(44))
+        gc.put(action("استخدام الشخصية الأصلية", false) {
             java.io.File(filesDir, "girl_custom.png").delete()
-            prefs.edit().remove("girl_scale").remove("girl_dx").remove("girl_dy").apply()
-            Toast.makeText(this, "رجعت الشخصية الأصلية", Toast.LENGTH_SHORT).show()
+            prefs.edit().putBoolean("girl_original", true).remove("girl_scale").remove("girl_dx").remove("girl_dy").remove("girl_sx").remove("girl_sy").apply()
+            Toast.makeText(this, "تم", Toast.LENGTH_SHORT).show()
+        }, 8, d(44))
+        gc.put(action("إزالة الصورة (مساحة فاضية)", false) {
+            java.io.File(filesDir, "girl_custom.png").delete()
+            prefs.edit().putBoolean("girl_original", false).apply()
+            Toast.makeText(this, "اتشالت الصورة", Toast.LENGTH_SHORT).show()
         }, 8, d(44))
         col.put(gc, 14)
+
+        col.put(action("امنح كل الصلاحيات (خطوة بخطوة)") { startGrantChain() }, 14, d(48))
 
         // ---- الصلاحيات ----
         col.put(tv("الصلاحيات", 18f, true), 18)
@@ -203,6 +211,32 @@ class MainActivity : Activity() {
         setContentView(ScrollView(this).apply { setBackgroundColor(Color.BLACK); addView(wrap) })
     }
 
+    // ---- سلسلة الصلاحيات: بتفتح كل شاشة صلاحية ناقصة واحدة ورا التانية ----
+    private var chain = -1
+    private fun startGrantChain() {
+        requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO, Manifest.permission.POST_NOTIFICATIONS, Manifest.permission.BLUETOOTH_CONNECT), 3)
+        chain = 0
+    }
+
+    private fun nextChainStep() {
+        if (chain < 0) return
+        val pm = getSystemService(POWER_SERVICE) as android.os.PowerManager
+        val steps = listOf<Pair<() -> Boolean, Intent>>(
+            { pm.isIgnoringBatteryOptimizations(packageName) } to Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:$packageName")),
+            { a11yOn() } to Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS),
+            { Settings.System.canWrite(this) } to Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS, Uri.parse("package:$packageName")),
+            { (getSystemService(NOTIFICATION_SERVICE) as NotificationManager).isNotificationPolicyAccessGranted } to Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS),
+            { listenerOn() } to Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
+        )
+        while (chain < steps.size) {
+            val (ok, intent) = steps[chain]
+            chain++
+            if (!ok()) { try { startActivity(intent) } catch (_: Exception) {}; return }
+        }
+        chain = -1
+        Toast.makeText(this, "كل الصلاحيات اتراجعت. (الأزرار المباشرة محتاجة أمر ADB الموجود تحت)", Toast.LENGTH_LONG).show()
+    }
+
     private fun pickGirl() {
         startActivityForResult(Intent(Intent.ACTION_GET_CONTENT).setType("image/*").addCategory(Intent.CATEGORY_OPENABLE), 41)
     }
@@ -220,16 +254,8 @@ class MainActivity : Activity() {
                 android.graphics.BitmapFactory.decodeStream(it, null, android.graphics.BitmapFactory.Options().apply { inSampleSize = sample })
             }
             if (bmp == null) { Toast.makeText(this, "مقدرتش أقرا الصورة", Toast.LENGTH_LONG).show(); return }
-            // لازم تكون شفافة: نفحص الأركان وحواف الصورة
-            var transparent = 0; var total = 0
-            val w = bmp.width; val h = bmp.height
-            val xs = intArrayOf(0, w / 2, w - 1); val ys = intArrayOf(0, h / 2, h - 1)
-            for (x in xs) for (y in ys) { total++; if (android.graphics.Color.alpha(bmp.getPixel(x, y)) < 40) transparent++ }
-            if (!bmp.hasAlpha() || transparent < 3) {
-                Toast.makeText(this, "الصورة لازم تكون من غير خلفية (PNG شفاف). امسح الخلفية الأول وجرّب تاني.", Toast.LENGTH_LONG).show(); return
-            }
             java.io.FileOutputStream(java.io.File(filesDir, "girl_custom.png")).use { bmp.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
-            prefs.edit().remove("girl_scale").remove("girl_dx").remove("girl_dy").apply()
+            prefs.edit().remove("girl_scale").remove("girl_dx").remove("girl_dy").remove("girl_sx").remove("girl_sy").apply()
             Toast.makeText(this, "تم. افتح اللوحة وعدّل المكان والحجم.", Toast.LENGTH_LONG).show()
         } catch (e: Exception) { Toast.makeText(this, "فشل: ${e.message}", Toast.LENGTH_LONG).show() }
     }
@@ -241,10 +267,11 @@ class MainActivity : Activity() {
     override fun onRequestPermissionsResult(code: Int, perms: Array<out String>, res: IntArray) {
         super.onRequestPermissionsResult(code, perms, res)
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED && prefs.getBoolean("wake_on", true)) startWake()
+        if (code == 3) nextChainStep()
     }
 
     override fun onResume() {
-        super.onResume(); refreshers.forEach { it() }; updateSummary()
+        super.onResume(); refreshers.forEach { it() }; updateSummary(); if (chain > 0) nextChainStep()
         if (prefs.getBoolean("wake_on", true) && !WakeWordService.isRunning() &&
             checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) startWake()
     }

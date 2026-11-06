@@ -158,38 +158,42 @@ class BgView(ctx: Context, private val left: Int) : View(ctx) {
 }
 
 /** البنت (خلفية شفافة) مرسومة فوق كل حاجة وبتظهر كلها من فوق لتحت. مبتاخدش لمس. */
+/** صورة اللوحة (الشخصية الأصلية أو صورة مخصّصة شفافة). مفيش صورة = مفيش حاجة بتترسم. بتمرّر اللمس للأزرار اللي تحتها. */
 class GirlView(ctx: Context, private val land: Boolean) : View(ctx) {
     private val prefs = ctx.getSharedPreferences("legion", Context.MODE_PRIVATE)
-    private var bmp: Bitmap = loadBmp()
+    private val custom = java.io.File(ctx.filesDir, "girl_custom.png").exists()
+    private val bmp: Bitmap? = loadBmp()
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
     private val d = RectF()
-    var scale = prefs.getFloat("girl_scale", 1f)
-    var dx = prefs.getFloat("girl_dx", 0f)      // نسبة من عرض الشاشة
-    var dy = prefs.getFloat("girl_dy", 0f)      // نسبة من طول الشاشة
+    var sx = prefs.getFloat("girl_sx", 1f)      // العرض
+    var sy = prefs.getFloat("girl_sy", 1f)      // الطول
+    var dx = prefs.getFloat("girl_dx", 0.04f)   // المكان من الشمال (نسبة من عرض الشاشة)
+    var dy = prefs.getFloat("girl_dy", 0f)      // المكان من تحت (نسبة من طول الشاشة)
+    val hasImage get() = bmp != null
     init { isClickable = false; isFocusable = false }
 
-    private fun loadBmp(): Bitmap {
+    private fun loadBmp(): Bitmap? {
         try {
             val f = java.io.File(context.filesDir, "girl_custom.png")
-            if (f.exists()) android.graphics.BitmapFactory.decodeFile(f.absolutePath)?.let { return it }
+            if (f.exists()) return android.graphics.BitmapFactory.decodeFile(f.absolutePath)
         } catch (_: Throwable) {}
-        return Glyphs.get(context, R.drawable.girl)
+        return if (prefs.getBoolean("girl_original", false)) Glyphs.get(context, R.drawable.girl) else null
     }
 
-    private fun aspect() = bmp.height.toFloat() / bmp.width
-    /** العرض الافتراضي للشخصية (بيحدد مكان اللوحة). */
-    fun defaultWidth(w: Int, h: Int): Int = if (land) (h / aspect()).toInt() else (w * 0.44f).toInt()
-
-    fun save() { prefs.edit().putFloat("girl_scale", scale).putFloat("girl_dx", dx).putFloat("girl_dy", dy).apply() }
-    fun reset() { scale = 1f; dx = 0f; dy = 0f; save(); invalidate() }
+    fun save() { prefs.edit().putFloat("girl_sx", sx).putFloat("girl_sy", sy).putFloat("girl_dx", dx).putFloat("girl_dy", dy).apply() }
+    fun restore() { sx = prefs.getFloat("girl_sx", 1f); sy = prefs.getFloat("girl_sy", 1f); dx = prefs.getFloat("girl_dx", 0.04f); dy = prefs.getFloat("girl_dy", 0f); invalidate() }
+    fun reset() { sx = 1f; sy = 1f; dx = 0.04f; dy = 0f; save(); invalidate() }
 
     override fun onDraw(c: Canvas) {
+        val b = bmp ?: return
         val vw = width.toFloat(); val vh = height.toFloat()
-        val w0 = defaultWidth(width, height).toFloat(); val h0 = w0 * aspect()
-        val w = w0 * scale; val h = h0 * scale
+        val ar = b.width.toFloat() / b.height
+        val h0 = if (custom) vh * 0.5f else if (land) vh else min(vh, vw * 0.44f / ar)
+        val w0 = h0 * ar
+        val w = w0 * sx; val h = h0 * sy
         val left = dx * vw; val bottom = vh + dy * vh
         d.set(left, bottom - h, left + w, bottom)
-        c.drawBitmap(bmp, null, d, paint)
+        c.drawBitmap(b, null, d, paint)
     }
     override fun onTouchEvent(e: MotionEvent): Boolean = false
 }
@@ -216,12 +220,12 @@ class RingGauge(ctx: Context, private val label: String) : View(ctx) {
 
     override fun onMeasure(w: Int, h: Int) {
         val sw = MeasureSpec.getSize(w)
-        setMeasuredDimension(sw, (min(sw, context.dpi(116)) + context.dpf(22f)).toInt())
+        setMeasuredDimension(sw, (min(sw, context.dpi(104)) + context.dpf(22f)).toInt())
     }
 
     override fun onDraw(c: Canvas) {
-        val d = min(width.toFloat(), context.dpf(116f))
-        val cx = width / 2f; val st = context.dpf(7f)
+        val d = min(width.toFloat(), context.dpf(104f))
+        val cx = width / 2f; val st = d * 0.065f
         val cy = d / 2f
         oval.set(cx - d / 2 + st, cy - d / 2 + st, cx + d / 2 - st, cy + d / 2 - st)
         p.strokeWidth = st; p.shader = null; p.color = Color.parseColor("#FF2A0A10")
@@ -234,10 +238,10 @@ class RingGauge(ctx: Context, private val label: String) : View(ctx) {
             p.clearLayerDefinition(); c.restore(); p.shader = null
         }
         t.typeface = Typeface.create("sans-serif", Typeface.NORMAL); t.color = Color.parseColor("#FFE6D0D2")
-        t.textSize = context.dpf(12f); c.drawText(label, cx, cy - d * 0.17f, t)
-        t.color = Color.WHITE; t.textSize = context.dpf(22f)
+        t.textSize = d * 0.105f; c.drawText(label, cx, cy - d * 0.17f, t)
+        t.color = Color.WHITE; t.textSize = d * 0.2f
         c.drawText(if (value < 0) "--" else "${shown.roundToInt()}%", cx, cy + d * 0.12f, t)
-        t.color = Color.parseColor("#FFFFB0B6"); t.textSize = context.dpf(11.5f)
+        t.color = Color.parseColor("#FFFFB0B6"); t.textSize = max(context.dpf(9f), d * 0.1f)
         c.drawText(sub, cx, d + context.dpf(14f), t)
     }
 

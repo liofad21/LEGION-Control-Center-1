@@ -144,7 +144,7 @@ class ControlPanel(
         return row
     }
 
-    private fun tile(ar: String, en: String, res: Int, key: String?, click: () -> Unit, h: Int = 84): GlassButton {
+    private fun tile(ar: String, en: String, res: Int, key: String?, click: () -> Unit, h: Int = 98): GlassButton {
         val b = GlassButton(svc, GlassButton.Shape.CARD, Glyphs.get(svc, res), if (en.isEmpty()) ar else "$ar\n$en", 58f, h)
         b.setOnClickListener { click(); after() }
         if (key != null) slowRefreshers += { dev.state(key)?.let { b.on = it } }
@@ -158,8 +158,8 @@ class ControlPanel(
     init {
         layoutDirection = LAYOUT_DIRECTION_LTR
         isClickable = true
-        val girlW = girl.defaultWidth(dm.widthPixels, dm.heightPixels)
-        val areaLeft = if (land) (girlW * 0.8f).toInt() else girlW
+        val girlW = 0
+        val areaLeft = 0
         val areaW = dm.widthPixels - areaLeft
         val k = dm.widthPixels / 2172f
         val topH = (256 * k).toInt(); val botH = (220 * k).toInt()
@@ -169,7 +169,7 @@ class ControlPanel(
 
         content = FrameLayout(svc)
         addView(content, LayoutParams(-1, -1).apply { leftMargin = areaLeft })
-        buildHeader(if (land) (girlW - areaLeft + d(16)) else d(14), topH)
+        buildHeader(d(14), topH)
 
         val colArea = FrameLayout(svc)
         content.addView(colArea, FrameLayout.LayoutParams(-1, -1).apply {
@@ -178,9 +178,9 @@ class ControlPanel(
         fun scroll(v: View) = ScrollView(svc).apply { isVerticalScrollBarEnabled = false; overScrollMode = OVER_SCROLL_NEVER; addView(v) }
         if (land) {
             val a = LinearLayout(svc).apply { orientation = LinearLayout.VERTICAL }
-            a.put(aiPanel(), 0, -2); a.put(connPanel(), 6); a.put(quickPanel(), 6); a.put(modesPanel(), 6)
+            a.put(aiPanel(), 0, -2); a.put(connPanel(), 12); a.put(quickPanel(), 12); a.put(modesPanel(), 12)
             val b = LinearLayout(svc).apply { orientation = LinearLayout.VERTICAL }
-            b.put(shortcutsPanel(5), 0); b.put(statusPanel(), 6); b.put(batteryPanel(), 6)
+            b.put(shortcutsPanel(5), 0); b.put(statusPanel(), 12); b.put(batteryPanel(), 12)
             val row = LinearLayout(svc)
             row.addView(scroll(a), LinearLayout.LayoutParams(0, -1, 1f).apply { marginEnd = d(4) })
             row.addView(scroll(b), LinearLayout.LayoutParams(0, -1, 1f).apply { marginStart = d(4) })
@@ -188,8 +188,8 @@ class ControlPanel(
         } else {
             // الوضع الطولي: عمود واحد بأطوال طبيعية وسكرول، والبنت في الشمال بعيد عن الأزرار
             val one = LinearLayout(svc).apply { orientation = LinearLayout.VERTICAL }
-            one.put(aiPanel(), 0, -2); one.put(connPanel(), 6); one.put(quickPanel(), 6); one.put(modesPanel(), 6)
-            one.put(shortcutsPanel(5), 6); one.put(statusPanel(), 6); one.put(batteryPanel(), 6)
+            one.put(aiPanel(), 0, -2); one.put(connPanel(), 12); one.put(quickPanel(), 12); one.put(modesPanel(), 12)
+            one.put(shortcutsPanel(5), 12); one.put(statusPanel(), 12); one.put(batteryPanel(), 12)
             colArea.addView(scroll(one), FrameLayout.LayoutParams(-1, -1))
         }
 
@@ -209,10 +209,19 @@ class ControlPanel(
     private var editLayer: View? = null
     private fun startGirlEdit() {
         if (editLayer != null) return
+        if (!girl.hasImage) {
+            dev.toast("اختار صورة الأول")
+            onClose()
+            try { svc.startActivity(Intent(svc, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK).putExtra("pick_girl", true)) } catch (_: Exception) {}
+            return
+        }
         val layer = FrameLayout(svc)
+        var seekW: SeekBar? = null; var seekH: SeekBar? = null
         val scaleDet = android.view.ScaleGestureDetector(svc, object : android.view.ScaleGestureDetector.SimpleOnScaleGestureListener() {
             override fun onScale(det: android.view.ScaleGestureDetector): Boolean {
-                girl.scale = (girl.scale * det.scaleFactor).coerceIn(0.3f, 3.5f); girl.invalidate(); return true
+                girl.sx = (girl.sx * det.scaleFactor).coerceIn(0.2f, 4f); girl.sy = (girl.sy * det.scaleFactor).coerceIn(0.2f, 4f)
+                seekW?.progress = (girl.sx * 100).toInt(); seekH?.progress = (girl.sy * 100).toInt()
+                girl.invalidate(); return true
             }
         })
         var lx = 0f; var ly = 0f
@@ -230,24 +239,43 @@ class ControlPanel(
             }
             true
         }
-        val hint = tv("اسحب الشخصية لتحريكها • بإصبعين كبّرها أو صغّرها", 14f).apply { gravity = Gravity.CENTER; background = Ui.glass(svc, 14f, true); setPadding(d(14), d(8), d(14), d(8)) }
+        val hint = tv("اسحب الصورة لتحريكها • بإصبعين كبّر/صغّر • أو استخدم المنزلقات", 14f).apply { gravity = Gravity.CENTER; background = Ui.glass(svc, 14f, true); setPadding(d(14), d(8), d(14), d(8)) }
         layer.addView(hint, FrameLayout.LayoutParams(-2, -2, Gravity.TOP or Gravity.CENTER_HORIZONTAL).apply { topMargin = d(90) })
-        val row = LinearLayout(svc).apply { background = Ui.glass(svc, 18f, true); setPadding(d(8), d(8), d(8), d(8)) }
+
+        val panelBox = LinearLayout(svc).apply { orientation = LinearLayout.VERTICAL; background = Ui.glass(svc, 18f, true); setPadding(d(14), d(10), d(14), d(10)); layoutDirection = LAYOUT_DIRECTION_RTL }
+        fun slider(name: String, get: () -> Float, set: (Float) -> Unit): SeekBar {
+            val row = LinearLayout(svc).apply { gravity = Gravity.CENTER_VERTICAL }
+            row.addView(tv(name, 13f), LinearLayout.LayoutParams(d(56), -2))
+            val sb = SeekBar(svc).apply {
+                max = 400; progress = (get() * 100).toInt()
+                setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                    override fun onProgressChanged(s: SeekBar, p: Int, fromUser: Boolean) { if (fromUser) { set((p.coerceAtLeast(20)) / 100f); girl.invalidate() } }
+                    override fun onStartTrackingTouch(s: SeekBar) {}
+                    override fun onStopTrackingTouch(s: SeekBar) {}
+                })
+            }
+            row.addView(sb, LinearLayout.LayoutParams(d(260), -2))
+            panelBox.addView(row)
+            return sb
+        }
+        seekW = slider("العرض", { girl.sx }) { girl.sx = it }
+        seekH = slider("الطول", { girl.sy }) { girl.sy = it }
+        val row = LinearLayout(svc).apply { gravity = Gravity.CENTER }
         fun b(t: String, on: Boolean, f: () -> Unit) = row.addView(GlassButton(svc, GlassButton.Shape.PILL, null, t).apply { this.on = on; setOnClickListener { f() } },
-            LinearLayout.LayoutParams(d(110), d(42)).apply { marginStart = d(4); marginEnd = d(4) })
+            LinearLayout.LayoutParams(d(100), d(40)).apply { marginStart = d(3); marginEnd = d(3) })
         fun end() { removeView(layer); editLayer = null }
         b("حفظ", true) { girl.save(); end() }
-        b("إعادة ضبط", false) { girl.reset() }
+        b("إعادة ضبط", false) { girl.reset(); seekW?.progress = 100; seekH?.progress = 100 }
         b("تغيير الصورة", false) {
             end(); onClose()
             try { svc.startActivity(Intent(svc, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK).putExtra("pick_girl", true)) } catch (_: Exception) {}
         }
-        b("إلغاء", false) { girl.scale = svc.dev.prefs.getFloat("girl_scale", 1f); girl.dx = svc.dev.prefs.getFloat("girl_dx", 0f); girl.dy = svc.dev.prefs.getFloat("girl_dy", 0f); girl.invalidate(); end() }
-        layer.addView(row, FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply { bottomMargin = d(40) })
+        b("إلغاء", false) { girl.restore(); end() }
+        panelBox.addView(row, LinearLayout.LayoutParams(-2, -2).apply { topMargin = d(8); gravity = Gravity.CENTER_HORIZONTAL })
+        layer.addView(panelBox, FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply { bottomMargin = d(40) })
         editLayer = layer
         addView(layer, LayoutParams(-1, -1))
         girl.bringToFront(); layer.bringToFront()
-        // الطبقة فوق الشخصية بس شفافة، فالشخصية ظاهرة
     }
 
     // ================= الهيدر: ساعة وتاريخ وحالة =================
@@ -255,8 +283,8 @@ class ControlPanel(
         val clock = tv("", 36f, false).apply { typeface = Typeface.create("sans-serif-light", Typeface.NORMAL); setShadowLayer(d(6).toFloat(), 0f, 0f, Color.parseColor("#88FF2A3A")) }
         val date = tv("", 14.5f, false, Color.parseColor("#FFF1E4E4"))
         val col = LinearLayout(svc).apply { orientation = LinearLayout.VERTICAL; addView(clock); addView(date.apply { setPadding(0, d(2), 0, 0) }) }
-        val editBtn = GlassButton(svc, GlassButton.Shape.PILL, null, "تعديل الشخصية").apply { setOnClickListener { startGirlEdit() } }
-        col.addView(editBtn, LinearLayout.LayoutParams(d(120), d(32)).apply { topMargin = d(6) })
+        val editBtn = GlassButton(svc, GlassButton.Shape.PILL, null, "تخصيص").apply { setOnClickListener { startGirlEdit() } }
+        col.addView(editBtn, LinearLayout.LayoutParams(d(96), d(34)).apply { topMargin = d(6) })
         this@ControlPanel.addView(col, LayoutParams(-2, -2).apply { leftMargin = d(16); topMargin = d(8) })
         val tf = SimpleDateFormat("HH:mm", Locale.US)
         val df = SimpleDateFormat("EEEE، d MMMM yyyy", Locale.forLanguageTag("ar-u-nu-latn"))
@@ -309,7 +337,7 @@ class ControlPanel(
         val chev = GlassButton(svc, GlassButton.Shape.CARD, Glyphs.get(svc, R.drawable.g_chevr), "", 58f, 40).apply { setOnClickListener { onClose(); svc.openAssistant(false) } }
         top.addView(chev, LinearLayout.LayoutParams(d(44), d(40)))
         right.addView(top, LinearLayout.LayoutParams(-1, -2))
-        fun ai(ar: String, res: Int, f: () -> Unit) = GlassButton(svc, GlassButton.Shape.CARD, Glyphs.get(svc, res), ar, 58f, 62).apply { setOnClickListener { f() } }
+        fun ai(ar: String, res: Int, f: () -> Unit) = GlassButton(svc, GlassButton.Shape.CARD, Glyphs.get(svc, res), ar, 58f, 74).apply { setOnClickListener { f() } }
         val btns = listOf(
             ai("محادثة", R.drawable.g_star) { onClose(); svc.openAssistant(false) },
             ai("تلخيص", R.drawable.g_doc) { svc.assistant?.let { svc.setBubbleVisible(true) }; svc.assistant?.summarizeScreen() },

@@ -48,8 +48,9 @@ class AiSettingsOverlay(private val svc: ControlAccessibilityService, private va
     }
 
     private fun sw(text: String, pref: String, def: Boolean, after: (Boolean) -> Unit = {}) = CheckBox(svc).apply {
-        this.text = text; setTextColor(Color.WHITE); textSize = 14f; isChecked = prefs.getBoolean(pref, def)
-        setOnCheckedChangeListener { _, v -> prefs.edit().putBoolean(pref, v).apply(); after(v) }
+        fun lbl(v: Boolean) = "$text — " + if (v) "مفعّل ✓" else "مقفول"
+        setTextColor(Color.WHITE); textSize = 14f; isChecked = prefs.getBoolean(pref, def); this.text = lbl(isChecked)
+        setOnCheckedChangeListener { _, v -> prefs.edit().putBoolean(pref, v).apply(); this.text = lbl(v); after(v) }
     }
 
     fun show() {
@@ -77,39 +78,33 @@ class AiSettingsOverlay(private val svc: ControlAccessibilityService, private va
         })
 
         col.add(label("التطبيقات:", 13f, Ui.TEXT_DIM), 8)
+        col.add(label("اختار التطبيق وادوس \"ترجمة\": هيتترجم تلقائي كل مرة تفتحه. (لو مفيش تطبيق متعلّم، كله بيتترجم)", 12f, Ui.TEXT_DIM), 0)
         val list = LinearLayout(svc).apply { orientation = LinearLayout.VERTICAL }
         fun selected(): MutableSet<String> = HashSet(prefs.getStringSet("translate_apps", emptySet()) ?: emptySet())
-        fun fillList() {
-            list.removeAllViews()
-            if (prefs.getBoolean("translate_all", true)) return
-            val pm = svc.packageManager
-            val q = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
-            val apps = pm.queryIntentActivities(q, 0).filter { it.activityInfo.packageName != svc.packageName }
-                .distinctBy { it.activityInfo.packageName }.sortedBy { it.loadLabel(pm).toString().lowercase() }
-            val sel = selected()
-            for (a in apps) {
-                val pkg = a.activityInfo.packageName
-                val r = LinearLayout(svc).apply { gravity = Gravity.CENTER_VERTICAL }
-                r.addView(ImageView(svc).apply { setImageDrawable(a.loadIcon(pm)) }, LinearLayout.LayoutParams(svc.dpi(30), svc.dpi(30)))
-                r.addView(CheckBox(svc).apply {
-                    text = a.loadLabel(pm).toString(); setTextColor(Color.WHITE); textSize = 14f; isChecked = pkg in sel
-                    setOnCheckedChangeListener { _, v ->
-                        val s = selected(); if (v) s.add(pkg) else s.remove(pkg)
-                        prefs.edit().putStringSet("translate_apps", s).apply()
-                        if (v && !topSw.isChecked) topSw.isChecked = true   // اختيار تطبيق = الترجمة شغّالة تلقائي كل مرة تفتحه
-                        svc.translationReload()
-                    }
-                }, LinearLayout.LayoutParams(0, -2, 1f).apply { marginStart = svc.dpi(8) })
-                r.addView(GlassButton(svc, GlassButton.Shape.PILL, null, "فتح").apply {
-                    setOnClickListener { svc.dev.launch(pkg); hide() }
-                }, LinearLayout.LayoutParams(svc.dpi(60), svc.dpi(34)))
-                list.addView(r, LinearLayout.LayoutParams(-1, svc.dpi(42)))
+        val pm = svc.packageManager
+        val apps = pm.queryIntentActivities(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0)
+            .filter { it.activityInfo.packageName != svc.packageName }
+            .distinctBy { it.activityInfo.packageName }.sortedBy { it.loadLabel(pm).toString().lowercase() }
+        for (a in apps) {
+            val pkg = a.activityInfo.packageName
+            val r = LinearLayout(svc).apply { gravity = Gravity.CENTER_VERTICAL }
+            r.addView(ImageView(svc).apply { setImageDrawable(a.loadIcon(pm)) }, LinearLayout.LayoutParams(svc.dpi(32), svc.dpi(32)))
+            r.addView(label(a.loadLabel(pm).toString()), LinearLayout.LayoutParams(0, -2, 1f).apply { marginStart = svc.dpi(8) })
+            val tb = GlassButton(svc, GlassButton.Shape.PILL, null, "")
+            fun upd() { val on = pkg in selected(); tb.setLabel(if (on) "ترجمة: مفعّل" else "ترجمة: لا"); tb.on = on }
+            upd()
+            tb.setOnClickListener {
+                val s2 = selected(); if (pkg in s2) s2.remove(pkg) else s2.add(pkg)
+                prefs.edit().putStringSet("translate_apps", s2).apply()
+                if (s2.isNotEmpty() && !topSw.isChecked) topSw.isChecked = true
+                upd(); svc.translationReload()
             }
+            r.addView(tb, LinearLayout.LayoutParams(svc.dpi(118), svc.dpi(36)))
+            r.addView(GlassButton(svc, GlassButton.Shape.PILL, null, "فتح").apply { setOnClickListener { svc.dev.launch(pkg); hide() } },
+                LinearLayout.LayoutParams(svc.dpi(60), svc.dpi(36)).apply { marginStart = svc.dpi(4) })
+            list.addView(r, LinearLayout.LayoutParams(-1, svc.dpi(46)))
         }
-        col.add(sw("كل التطبيقات (الصينية فقط تتترجم)", "translate_all", true) { if (!it && !topSw.isChecked) topSw.isChecked = true; fillList(); svc.translationReload() }, 2)
-        col.add(label("لو قفلتها اختار التطبيقات اللي عايزها تتترجم بس:", 12f, Ui.TEXT_DIM), 0)
         col.add(list, 4)
-        fillList()
 
         col.add(label("المساعدة", 16f), 14)
         col.add(sw("Raven ترد بصوتها", "voice_replies", true), 4)
