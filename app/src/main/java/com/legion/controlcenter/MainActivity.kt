@@ -94,8 +94,13 @@ class MainActivity : Activity() {
         }
         ai.put(key, 10, d(48))
         ai.put(action("حفظ المفتاح") {
-            prefs.edit().putString("gemini_key", key.text.toString().trim()).apply()
-            Toast.makeText(this, "تم الحفظ", Toast.LENGTH_SHORT).show()
+            val k = key.text.toString().filter { !it.isWhitespace() }
+            if (!k.startsWith("AIza") || k.length < 30) {
+                Toast.makeText(this, "ده مش مفتاح Gemini صحيح. لازم يبدأ بـ AIza", Toast.LENGTH_LONG).show()
+            } else {
+                prefs.edit().putString("gemini_key", k).apply()
+                Toast.makeText(this, "تم الحفظ", Toast.LENGTH_SHORT).show()
+            }
         }, 8, d(44))
         ai.put(tv("المفتاح مجاني من aistudio.google.com ← Get API key، وبيتخزّن على التابلت بس.", 12f, false, Ui.TEXT_DIM), 6)
         fun sw(label: String, pref: String, def: Boolean, onChange: (Boolean) -> Unit = {}): Switch = Switch(this).apply {
@@ -203,6 +208,6 @@ class MainActivity : Activity() {
     private fun updateSummary() {
         val n = listOf(a11yOn(), Settings.System.canWrite(this),
             (getSystemService(NOTIFICATION_SERVICE) as NotificationManager).isNotificationPolicyAccessGranted, listenerOn()).count { it }
-        summary.text = "تم تفعيل $n من 4 صلاحيات"
+        summary.text = "تم تفعيل $n من 4 صلاحيات" + (if (prefs.getBoolean("wake_on", true)) "\nكلمة RAVEN: " + (prefs.getString("wake_status", "لسه مبدأتش") ?: "") else "")
     }
 }

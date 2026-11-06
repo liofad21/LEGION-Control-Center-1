@@ -262,8 +262,13 @@ class AssistantOverlay(private val svc: ControlAccessibilityService, private val
     }
 
     private fun keyMissing(): Boolean {
-        if ((prefs.getString("gemini_key", "") ?: "").isBlank()) {
+        val k = (prefs.getString("gemini_key", "") ?: "").filter { !it.isWhitespace() }
+        if (k.isBlank()) {
             say("Raven", "محتاجة مفتاح Gemini API. افتح تطبيق Legion Control Center وحطه في خانة Raven.")
+            return true
+        }
+        if (!k.startsWith("AIza") || k.length < 30) {
+            say("Raven", "المفتاح المحفوظ مش مفتاح Gemini صحيح (لازم يبدأ بـ AIza). افتح التطبيق، امسح الخانة وحط المفتاح من aistudio.google.com.")
             return true
         }
         return false
@@ -358,6 +363,20 @@ class AssistantOverlay(private val svc: ControlAccessibilityService, private val
 
     /** الأدوات اللي Gemini بينفذها. بتتنفذ على الـ thread الرئيسي وبترجع نتيجة نصية. */
     fun runTool(name: String, a: JSONObject): String {
+        // أدوات التحكم في التطبيقات بتستنّى ظهور العناصر، فبتشتغل على الـ thread الحالي مش الـ UI
+        when (name) {
+            "tap_text" -> { ui.post { closeChat() }; return if (svc.tapText(a.optString("text"))) "tapped '${a.optString("text")}'" else "not found on screen: ${a.optString("text")}" }
+            "type_text" -> { ui.post { closeChat() }; return if (svc.typeText(a.optString("text"), a.optBoolean("submit", false))) "typed" else "no text field found" }
+            "scroll_screen" -> { ui.post { closeChat() }; return if (svc.scrollScreen(a.optString("direction") != "up")) "scrolled" else "nothing scrollable" }
+            "web_search" -> {
+                val q = a.optString("query")
+                ui.post { closeChat() }
+                return try {
+                    svc.startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://www.google.com/search?q=" + java.net.URLEncoder.encode(q, "UTF-8"))).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                    "opened google results for: $q"
+                } catch (e: Exception) { "failed: ${e.message}" }
+            }
+        }
         var out = "error"
         val latch = java.util.concurrent.CountDownLatch(1)
         ui.post {

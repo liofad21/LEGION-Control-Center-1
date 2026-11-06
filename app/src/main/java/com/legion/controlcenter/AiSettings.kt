@@ -64,7 +64,8 @@ class AiSettingsOverlay(private val svc: ControlAccessibilityService, private va
         }
 
         col.add(label("الترجمة التلقائية للتطبيقات", 16f), 4)
-        col.add(sw("تشغيل الترجمة", "translate_on", false) { svc.setTranslation(it) }, 4)
+        val topSw = sw("تشغيل الترجمة", "translate_on", false) { svc.setTranslation(it) }
+        col.add(topSw, 4)
 
         col.add(label("ترجم إلى:", 13f, Ui.TEXT_DIM), 8)
         col.add(chips(TARGETS, { prefs.getString("translate_lang", "English") ?: "English" }) { v ->
@@ -94,13 +95,18 @@ class AiSettingsOverlay(private val svc: ControlAccessibilityService, private va
                     text = a.loadLabel(pm).toString(); setTextColor(Color.WHITE); textSize = 14f; isChecked = pkg in sel
                     setOnCheckedChangeListener { _, v ->
                         val s = selected(); if (v) s.add(pkg) else s.remove(pkg)
-                        prefs.edit().putStringSet("translate_apps", s).apply(); svc.translationReload()
+                        prefs.edit().putStringSet("translate_apps", s).apply()
+                        if (v && !topSw.isChecked) topSw.isChecked = true   // اختيار تطبيق = الترجمة شغّالة تلقائي كل مرة تفتحه
+                        svc.translationReload()
                     }
                 }, LinearLayout.LayoutParams(0, -2, 1f).apply { marginStart = svc.dpi(8) })
+                r.addView(GlassButton(svc, GlassButton.Shape.PILL, null, "فتح").apply {
+                    setOnClickListener { svc.dev.launch(pkg); hide() }
+                }, LinearLayout.LayoutParams(svc.dpi(60), svc.dpi(34)))
                 list.addView(r, LinearLayout.LayoutParams(-1, svc.dpi(42)))
             }
         }
-        col.add(sw("كل التطبيقات (الصينية فقط تتترجم)", "translate_all", true) { fillList(); svc.translationReload() }, 2)
+        col.add(sw("كل التطبيقات (الصينية فقط تتترجم)", "translate_all", true) { if (!it && !topSw.isChecked) topSw.isChecked = true; fillList(); svc.translationReload() }, 2)
         col.add(label("لو قفلتها اختار التطبيقات اللي عايزها تتترجم بس:", 12f, Ui.TEXT_DIM), 0)
         col.add(list, 4)
         fillList()

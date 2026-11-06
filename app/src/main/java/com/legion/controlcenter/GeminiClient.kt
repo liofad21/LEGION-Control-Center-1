@@ -24,6 +24,7 @@ class GeminiClient(private val keyProvider: () -> String, private val actions: (
                 "شخصيتك: ناعمة ومرحة وواثقة، بتتكلمي زي صاحبة قريبة، مش زي روبوت. ماتقوليش أبدًا إنك ذكاء اصطناعي أو نموذج أو برنامج، وماتقدّميش نفسك بشكل رسمي. " +
                 "اتكلمي بنفس لغة ريو (غالبًا عامية مصرية، ولو كلمك إنجليزي ردي إنجليزي). الرد بيتقرأ بصوت، فخليه قصير جدًا: جملة أو اتنين، من غير قوايم ولا رموز ولا ماركداون ولا إيموجي. " +
                 "لو ريو طلب حاجة في التابلت نفّذيها بالأدوات الأول وبعدين قوليله اللي حصل بجملة قصيرة. لو الأداة فشلت أو الحاجة مش متاحة قولي كده بصراحة وماتختلقيش نتايج. " +
+                "تقدري تتحكمي في أي تطبيق: افتحي التطبيق بـ open_app، وبعدين استخدمي tap_text للضغط على الأزرار باسمها، وtype_text للكتابة في خانة البحث، وscroll_screen للتمرير، وread_screen عشان تشوفي اللي على الشاشة. للبحث السريع على جوجل استخدمي web_search. نفّذي الخطوات واحدة ورا التانية وبعدين قولي النتيجة. " +
                 "لو وصلك صوت، افهمي الكلام اللي فيه وتصرّفي عليه مباشرة. لو مفهمتيش قولي إنك ماسمعتيش كويس."
 
         private fun fn(name: String, desc: String, props: JSONObject? = null, req: List<String> = emptyList()): JSONObject {
@@ -46,6 +47,10 @@ class GeminiClient(private val keyProvider: () -> String, private val actions: (
             .put(fn("media_control", "يتحكم في تشغيل الميديا", JSONObject().put("action", p("STRING", "الأمر", listOf("play_pause", "next", "previous"))), listOf("action")))
             .put(fn("system_action", "أمر نظام", JSONObject().put("action", p("STRING", "الأمر", listOf("home", "back", "recents", "screenshot", "split_screen", "lock", "power_menu"))), listOf("action")))
             .put(fn("open_app", "يفتح تطبيق باسمه", JSONObject().put("name", p("STRING", "اسم التطبيق زي ما بيظهر على التابلت")), listOf("name")))
+            .put(fn("web_search", "يبحث في جوجل عن موضوع ويفتح نتايج البحث", JSONObject().put("query", p("STRING", "كلمات البحث")), listOf("query")))
+            .put(fn("tap_text", "يدوس على زر أو عنصر ظاهر على الشاشة باسمه (النص المكتوب عليه). استخدميها بعد فتح التطبيق للضغط على أي زر أو نتيجة", JSONObject().put("text", p("STRING", "النص المكتوب على الزر زي ما هو ظاهر")), listOf("text")))
+            .put(fn("type_text", "يكتب نص في خانة الكتابة الحالية (مثلاً خانة البحث) ويقدر يضغط Enter", JSONObject().put("text", p("STRING", "النص")).put("submit", p("BOOLEAN", "true للضغط على بحث/Enter بعد الكتابة")), listOf("text")))
+            .put(fn("scroll_screen", "يعمل تمرير للشاشة", JSONObject().put("direction", p("STRING", "الاتجاه", listOf("down", "up"))), listOf("direction")))
             .put(fn("open_control_center", "يفتح لوحة Legion Control Center"))
             .put(fn("toggle_performance_monitor", "يظهر أو يخفي عدّاد الأداء العايم"))
             .put(fn("toggle_chinese_translation", "يشغّل أو يقفل ترجمة التطبيقات الصينية للإنجليزي", JSONObject().put("enabled", p("BOOLEAN", "true أو false")), listOf("enabled")))

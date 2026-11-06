@@ -43,7 +43,7 @@ class ControlAccessibilityService : AccessibilityService() {
 
     /** عميل Gemini واحد مشترك بين Raven والترجمة. */
     val gemini: GeminiClient by lazy {
-        GeminiClient({ dev.prefs.getString("gemini_key", "") ?: "" }) { n, a -> assistant?.runTool(n, a) ?: "المساعدة مش شغّالة" }
+        GeminiClient({ (dev.prefs.getString("gemini_key", "") ?: "").filter { !it.isWhitespace() } }) { n, a -> assistant?.runTool(n, a) ?: "المساعدة مش شغّالة" }
     }
 
     fun postDelayed(ms: Long, r: () -> Unit) { handler.postDelayed({ r() }, ms) }
@@ -180,6 +180,82 @@ class ControlAccessibilityService : AccessibilityService() {
         return sb.toString().take(max)
     }
 
+    // ================= تحكم Raven في التطبيقات =================
+    private fun otherRoots(): List<AccessibilityNodeInfo> {
+        val out = ArrayList<AccessibilityNodeInfo>()
+        try { for (w in windows) { val r = w.root ?: continue; if (r.packageName?.toString() != packageName) out.add(r) } } catch (_: Exception) {}
+        if (out.isEmpty()) rootInActiveWindow?.let { out.add(it) }
+        return out
+    }
+
+    private fun gestureTap(x: Float, y: Float) {
+        val p = android.graphics.Path().apply { moveTo(x, y) }
+        dispatchGesture(android.accessibilityservice.GestureDescription.Builder()
+            .addStroke(android.accessibilityservice.GestureDescription.StrokeDescription(p, 0, 60)).build(), null, null)
+    }
+
+    /** بيدوس على عنصر بنصه (بيحاول لحد 4 ثواني لحد ما يظهر). بيتنادى من thread خلفي. */
+    fun tapText(text: String, waitMs: Long = 4000): Boolean {
+        val end = System.currentTimeMillis() + waitMs
+        while (true) {
+            for (root in otherRoots()) {
+                val nodes = try { root.findAccessibilityNodeInfosByText(text) } catch (_: Exception) { emptyList<AccessibilityNodeInfo>() }
+                val n = nodes.firstOrNull { it.isVisibleToUser } ?: continue
+                var c: AccessibilityNodeInfo? = n
+                while (c != null && !c.isClickable) c = c.parent
+                if (c != null && c.performAction(AccessibilityNodeInfo.ACTION_CLICK)) return true
+                val r = android.graphics.Rect(); n.getBoundsInScreen(r)
+                if (r.width() > 0) { gestureTap(r.exactCenterX(), r.exactCenterY()); return true }
+            }
+            if (System.currentTimeMillis() > end) return false
+            try { Thread.sleep(400) } catch (_: Exception) { return false }
+        }
+    }
+
+    private fun findEditable(n: AccessibilityNodeInfo?, d: Int = 0): AccessibilityNodeInfo? {
+        if (n == null || d > 40) return null
+        if (n.isEditable && n.isVisibleToUser) return n
+        for (i in 0 until n.childCount) findEditable(n.getChild(i), d + 1)?.let { return it }
+        return null
+    }
+
+    fun typeText(text: String, submit: Boolean, waitMs: Long = 4000): Boolean {
+        val end = System.currentTimeMillis() + waitMs
+        while (true) {
+            for (root in otherRoots()) {
+                val f = root.findFocus(AccessibilityNodeInfo.FOCUS_INPUT) ?: findEditable(root)
+                if (f != null) {
+                    f.performAction(AccessibilityNodeInfo.ACTION_FOCUS)
+                    val a = android.os.Bundle().apply { putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, text) }
+                    if (f.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, a)) {
+                        if (submit) {
+                            try { Thread.sleep(350) } catch (_: Exception) {}
+                            if (Build.VERSION.SDK_INT >= 30) f.performAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_IME_ENTER.id)
+                        }
+                        return true
+                    }
+                }
+            }
+            if (System.currentTimeMillis() > end) return false
+            try { Thread.sleep(400) } catch (_: Exception) { return false }
+        }
+    }
+
+    private fun findScrollNode(n: AccessibilityNodeInfo?, d: Int = 0): AccessibilityNodeInfo? {
+        if (n == null || d > 40) return null
+        if (n.isScrollable && n.isVisibleToUser) return n
+        for (i in 0 until n.childCount) findScrollNode(n.getChild(i), d + 1)?.let { return it }
+        return null
+    }
+
+    fun scrollScreen(down: Boolean): Boolean {
+        for (root in otherRoots()) {
+            val s = findScrollNode(root) ?: continue
+            if (s.performAction(if (down) AccessibilityNodeInfo.ACTION_SCROLL_FORWARD else AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD)) return true
+        }
+        return false
+    }
+
     /** لقطة شاشة كـ Bitmap (Android 11+). بترجّع null لو مش متاحة. */
     fun takeScreenshotBitmap(cb: (Bitmap?) -> Unit) {
         if (Build.VERSION.SDK_INT < 30) { cb(null); return }
@@ -205,7 +281,7 @@ class ControlAccessibilityService : AccessibilityService() {
     fun translationReload() { translation?.reload() }
     private var aiSettings: AiSettingsOverlay? = null
     fun openAiSettings() {
-        hidePanel()
+        hidePanel(); assistant?.closeChat()
         if (aiSettings?.isShowing == true) return
         aiSettings = AiSettingsOverlay(this) { aiSettings = null }.also { it.show() }
         assistant?.bringToFront()

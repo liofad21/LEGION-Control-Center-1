@@ -158,14 +158,14 @@ class ControlPanel(
     init {
         layoutDirection = LAYOUT_DIRECTION_LTR
         isClickable = true
-        val girlW = if (land) girl.widthFor(dm.heightPixels) else (dm.widthPixels * 0.30f).toInt()
-        val areaLeft = (girlW * 0.8f).toInt()
+        val girlW = if (land) girl.widthFor(dm.heightPixels) else (dm.widthPixels * 0.40f).toInt()
+        val areaLeft = if (land) (girlW * 0.8f).toInt() else girlW
         val areaW = dm.widthPixels - areaLeft
-        val k = areaW / 2172f
+        val k = dm.widthPixels / 2172f
         val topH = (256 * k).toInt(); val botH = (220 * k).toInt()
         val side = (areaW * 0.076f).toInt()
 
-        addView(BgView(svc, areaLeft), LayoutParams(-1, -1))
+        addView(BgView(svc, 0), LayoutParams(-1, -1))
 
         content = FrameLayout(svc)
         addView(content, LayoutParams(-1, -1).apply { leftMargin = areaLeft })
@@ -173,34 +173,24 @@ class ControlPanel(
 
         val colArea = FrameLayout(svc)
         content.addView(colArea, FrameLayout.LayoutParams(-1, -1).apply {
-            leftMargin = side + (if (land) 0 else girlW - areaLeft); rightMargin = side; topMargin = topH; bottomMargin = botH
+            leftMargin = side + (girlW - areaLeft); rightMargin = side; topMargin = topH; bottomMargin = botH
         })
-        if (!land) {
-            val col = LinearLayout(svc).apply { orientation = LinearLayout.VERTICAL }
-            col.addView(aiPanel(), LinearLayout.LayoutParams(-1, 0, 182f))
-            val r1 = LinearLayout(svc)
-            r1.addView(connPanel(), LinearLayout.LayoutParams(0, -1, 1f).apply { marginEnd = d(4) })
-            r1.addView(quickPanel(), LinearLayout.LayoutParams(0, -1, 1f).apply { marginStart = d(4) })
-            col.addView(r1, LinearLayout.LayoutParams(-1, 0, 213f).apply { topMargin = d(6) })
-            col.addView(modesPanel(), LinearLayout.LayoutParams(-1, 0, 143f).apply { topMargin = d(6) })
-            col.addView(shortcutsPanel(7), LinearLayout.LayoutParams(-1, 0, 427f).apply { topMargin = d(6) })
-            val r2 = LinearLayout(svc)
-            r2.addView(statusPanel(), LinearLayout.LayoutParams(0, -1, 1.45f).apply { marginEnd = d(4) })
-            r2.addView(batteryPanel(), LinearLayout.LayoutParams(0, -1, 1f).apply { marginStart = d(4) })
-            col.addView(r2, LinearLayout.LayoutParams(-1, 0, 198f).apply { topMargin = d(6) })
-            val sv = ScrollView(svc).apply { isFillViewport = true; isVerticalScrollBarEnabled = false; overScrollMode = OVER_SCROLL_NEVER }
-            sv.addView(col, FrameLayout.LayoutParams(-1, -1))
-            colArea.addView(sv, FrameLayout.LayoutParams(-1, -1))
-        } else {
+        fun scroll(v: View) = ScrollView(svc).apply { isVerticalScrollBarEnabled = false; overScrollMode = OVER_SCROLL_NEVER; addView(v) }
+        if (land) {
             val a = LinearLayout(svc).apply { orientation = LinearLayout.VERTICAL }
             a.put(aiPanel(), 0, -2); a.put(connPanel(), 6); a.put(quickPanel(), 6); a.put(modesPanel(), 6)
             val b = LinearLayout(svc).apply { orientation = LinearLayout.VERTICAL }
             b.put(shortcutsPanel(5), 0); b.put(statusPanel(), 6); b.put(batteryPanel(), 6)
             val row = LinearLayout(svc)
-            fun scroll(v: View) = ScrollView(svc).apply { isVerticalScrollBarEnabled = false; overScrollMode = OVER_SCROLL_NEVER; addView(v) }
             row.addView(scroll(a), LinearLayout.LayoutParams(0, -1, 1f).apply { marginEnd = d(4) })
             row.addView(scroll(b), LinearLayout.LayoutParams(0, -1, 1f).apply { marginStart = d(4) })
             colArea.addView(row, FrameLayout.LayoutParams(-1, -1))
+        } else {
+            // الوضع الطولي: عمود واحد بأطوال طبيعية وسكرول، والبنت في الشمال بعيد عن الأزرار
+            val one = LinearLayout(svc).apply { orientation = LinearLayout.VERTICAL }
+            one.put(aiPanel(), 0, -2); one.put(connPanel(), 6); one.put(quickPanel(), 6); one.put(modesPanel(), 6)
+            one.put(shortcutsPanel(5), 6); one.put(statusPanel(), 6); one.put(batteryPanel(), 6)
+            colArea.addView(scroll(one), FrameLayout.LayoutParams(-1, -1))
         }
 
         // البنت فوق كل حاجة (بتظهر كاملة من الراس للرجلين في الوضع العرضي)
@@ -404,12 +394,6 @@ class ControlPanel(
             tile("QR code", "QR code scanner", R.drawable.g_qr, null, { onClose(); dev.toggle("qr", fb) })
         )
         box.put(grid(items, cols, 5), 6)
-        if (!land) {
-            // شعار فاضي المكان زي الصورة
-            val emblem = ImageView(svc).apply { setImageResource(R.drawable.emblem); alpha = 0.9f; scaleType = ImageView.ScaleType.FIT_CENTER }
-            box.put(emblem, -64, d(56))
-            (emblem.layoutParams as LinearLayout.LayoutParams).apply { width = d(110); gravity = Gravity.CENTER_HORIZONTAL; bottomMargin = d(6) }
-        }
         return box
     }
 

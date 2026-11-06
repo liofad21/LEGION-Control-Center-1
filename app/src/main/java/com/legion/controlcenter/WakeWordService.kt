@@ -35,7 +35,8 @@ class WakeWordService : Service() {
         fun isRunning() = inst != null
         fun pause() { inst?.pauseListening() }
         fun resume() { inst?.resumeListening() }
-        private val WAKE = Regex("(raven|ravin|rayven|revan|ravan|riven|ریفن|ريفن|رايفن|رافن|ريڤن|رايڤن)", RegexOption.IGNORE_CASE)
+        private val WAKE = Regex("(r[aeiy]+[vwf]+[aeiy]*n|rayven|ر[اىي]?[فڤ][يىا]?ن|ريڤ|ريف)", RegexOption.IGNORE_CASE)
+        private fun status(c: Context, t: String) { c.getSharedPreferences("legion", Context.MODE_PRIVATE).edit().putString("wake_status", t).apply() }
     }
 
     private val ui = Handler(Looper.getMainLooper())
@@ -43,6 +44,7 @@ class WakeWordService : Service() {
     private var paused = false
     private var lastWake = 0L
     private var fails = 0
+    private var langIdx = 0
 
     override fun onBind(i: Intent?): IBinder? = null
 
@@ -62,7 +64,12 @@ class WakeWordService : Service() {
     private fun listen() {
         if (paused || inst == null) return
         if (checkSelfPermission("android.permission.RECORD_AUDIO") != android.content.pm.PackageManager.PERMISSION_GRANTED) { stopSelf(); return }
-        if (!SpeechRecognizer.isRecognitionAvailable(this)) { stopSelf(); return }
+        if (!SpeechRecognizer.isRecognitionAvailable(this)) {
+            status(this, "مفيش خدمة تعرف على الكلام على الجهاز (ثبّت/فعّل Google أو Speech Services)")
+            ui.post { android.widget.Toast.makeText(this, "كلمة RAVEN: مفيش خدمة تعرف على الكلام على التابلت. ثبّت تطبيق Google أو Speech Services.", android.widget.Toast.LENGTH_LONG).show() }
+            stopSelf(); return
+        }
+        langIdx++
         rec?.destroy()
         val r = SpeechRecognizer.createSpeechRecognizer(this)
         rec = r
@@ -76,10 +83,11 @@ class WakeWordService : Service() {
             override fun onResults(b: Bundle?) { fails = 0; if (!check(b)) restart(250) }
             override fun onError(e: Int) {
                 fails++
+                status(this@WakeWordService, "خطأ التعرف على الكلام: كود $e")
                 // 5 = العميل اتلغى، 7 = مفيش كلام (طبيعي)، 8 = مشغول
                 restart(if (e == SpeechRecognizer.ERROR_NO_MATCH || e == SpeechRecognizer.ERROR_SPEECH_TIMEOUT) 200 else minOf(8000L, 800L * fails))
             }
-            override fun onReadyForSpeech(p: Bundle?) {}
+            override fun onReadyForSpeech(p: Bundle?) { status(this@WakeWordService, "سامعة ✓") }
             override fun onBeginningOfSpeech() {}
             override fun onRmsChanged(v: Float) {}
             override fun onBufferReceived(b: ByteArray?) {}
@@ -88,9 +96,9 @@ class WakeWordService : Service() {
         })
         r.startListening(Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE, "en-US")
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, if (langIdx % 2 == 0) "en-US" else "ar-EG")
             putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
-            putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
+            putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 5)
             putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, packageName)
         })
     }
