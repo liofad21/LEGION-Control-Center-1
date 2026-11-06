@@ -191,7 +191,7 @@ class AssistantOverlay(private val svc: ControlAccessibilityService, private val
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.BOTTOM or Gravity.END
-            x = svc.dpi(12); y = svc.dpi(24)
+            this.x = svc.dpi(12); this.y = svc.dpi(24)
             softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
         }
         wm.addView(root, lp)
