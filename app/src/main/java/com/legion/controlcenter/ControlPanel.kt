@@ -152,14 +152,19 @@ class ControlPanel(
     }
 
     // ---------- الشخصية والخلفية ----------
-    private val girl = GirlView(svc, land)
+    /** مساحة مخصصة للصورة على الشمال: القوايم بتاخد الباقي بس ومبتغطيش الشاشة كلها. */
+    private val zoneKey get() = if (land) "zone_w_l" else "zone_w"
+    private val zoneFrac get() = svc.dev.prefs.getFloat(zoneKey, if (land) 0.24f else 0.30f).coerceIn(0.12f, 0.5f)
+    private val hasImg = java.io.File(svc.filesDir, "girl_custom.png").exists() || svc.dev.prefs.getBoolean("girl_original", false)
+    private val zoneW = if (hasImg) (dm.widthPixels * zoneFrac).toInt() else 0
+    private val girl = GirlView(svc, land, zoneW)
     private lateinit var content: FrameLayout
 
     init {
         layoutDirection = LAYOUT_DIRECTION_LTR
         isClickable = true
         val girlW = 0
-        val areaLeft = 0
+        val areaLeft = zoneW
         val areaW = dm.widthPixels - areaLeft
         val k = dm.widthPixels / 2172f
         val topH = (256 * k).toInt(); val botH = (220 * k).toInt()
@@ -264,6 +269,13 @@ class ControlPanel(
         fun b(t: String, on: Boolean, f: () -> Unit) = row.addView(GlassButton(svc, GlassButton.Shape.PILL, null, t).apply { this.on = on; setOnClickListener { f() } },
             LinearLayout.LayoutParams(d(100), d(40)).apply { marginStart = d(3); marginEnd = d(3) })
         fun end() { removeView(layer); editLayer = null }
+        fun zone(delta: Float) {
+            girl.save()
+            svc.dev.prefs.edit().putFloat(zoneKey, (zoneFrac + delta).coerceIn(0.12f, 0.5f)).apply()
+            end(); onClose(); svc.postDelayed(350) { svc.showPanel(false) }
+        }
+        b("مساحة +", false) { zone(0.05f) }
+        b("مساحة −", false) { zone(-0.05f) }
         b("حفظ", true) { girl.save(); end() }
         b("إعادة ضبط", false) { girl.reset(); seekW?.progress = 100; seekH?.progress = 100 }
         b("تغيير الصورة", false) {

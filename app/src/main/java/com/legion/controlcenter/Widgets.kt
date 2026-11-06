@@ -159,7 +159,7 @@ class BgView(ctx: Context, private val left: Int) : View(ctx) {
 
 /** البنت (خلفية شفافة) مرسومة فوق كل حاجة وبتظهر كلها من فوق لتحت. مبتاخدش لمس. */
 /** صورة اللوحة (الشخصية الأصلية أو صورة مخصّصة شفافة). مفيش صورة = مفيش حاجة بتترسم. بتمرّر اللمس للأزرار اللي تحتها. */
-class GirlView(ctx: Context, private val land: Boolean) : View(ctx) {
+class GirlView(ctx: Context, private val land: Boolean, private val zoneW: Int = 0) : View(ctx) {
     private val prefs = ctx.getSharedPreferences("legion", Context.MODE_PRIVATE)
     private val custom = java.io.File(ctx.filesDir, "girl_custom.png").exists()
     private val bmp: Bitmap? = loadBmp()
@@ -167,7 +167,7 @@ class GirlView(ctx: Context, private val land: Boolean) : View(ctx) {
     private val d = RectF()
     var sx = prefs.getFloat("girl_sx", 1f)      // العرض
     var sy = prefs.getFloat("girl_sy", 1f)      // الطول
-    var dx = prefs.getFloat("girl_dx", 0.04f)   // المكان من الشمال (نسبة من عرض الشاشة)
+    var dx = prefs.getFloat("girl_dx", 0f)   // المكان من الشمال (نسبة من عرض الشاشة)
     var dy = prefs.getFloat("girl_dy", 0f)      // المكان من تحت (نسبة من طول الشاشة)
     val hasImage get() = bmp != null
     init { isClickable = false; isFocusable = false }
@@ -181,15 +181,16 @@ class GirlView(ctx: Context, private val land: Boolean) : View(ctx) {
     }
 
     fun save() { prefs.edit().putFloat("girl_sx", sx).putFloat("girl_sy", sy).putFloat("girl_dx", dx).putFloat("girl_dy", dy).apply() }
-    fun restore() { sx = prefs.getFloat("girl_sx", 1f); sy = prefs.getFloat("girl_sy", 1f); dx = prefs.getFloat("girl_dx", 0.04f); dy = prefs.getFloat("girl_dy", 0f); invalidate() }
-    fun reset() { sx = 1f; sy = 1f; dx = 0.04f; dy = 0f; save(); invalidate() }
+    fun restore() { sx = prefs.getFloat("girl_sx", 1f); sy = prefs.getFloat("girl_sy", 1f); dx = prefs.getFloat("girl_dx", 0f); dy = prefs.getFloat("girl_dy", 0f); invalidate() }
+    fun reset() { sx = 1f; sy = 1f; dx = 0f; dy = 0f; save(); invalidate() }
 
     override fun onDraw(c: Canvas) {
         val b = bmp ?: return
         val vw = width.toFloat(); val vh = height.toFloat()
         val ar = b.width.toFloat() / b.height
-        val h0 = if (custom) vh * 0.5f else if (land) vh else min(vh, vw * 0.44f / ar)
-        val w0 = h0 * ar
+        var w0 = if (zoneW > 0) zoneW.toFloat() else vw * 0.3f
+        var h0 = w0 / ar
+        if (h0 > vh * 0.92f) { h0 = vh * 0.92f; w0 = h0 * ar }
         val w = w0 * sx; val h = h0 * sy
         val left = dx * vw; val bottom = vh + dy * vh
         d.set(left, bottom - h, left + w, bottom)
