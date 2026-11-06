@@ -156,7 +156,7 @@ class ControlPanel(
     private val zoneKey get() = if (land) "zone_w_l" else "zone_w"
     private val zoneFrac get() = svc.dev.prefs.getFloat(zoneKey, if (land) 0.24f else 0.30f).coerceIn(0.12f, 0.5f)
     private val hasImg = java.io.File(svc.filesDir, "girl_custom.png").exists() || svc.dev.prefs.getBoolean("girl_original", false)
-    private val zoneW = if (hasImg) (dm.widthPixels * zoneFrac).toInt() else 0
+    private val zoneW = (dm.widthPixels * zoneFrac).toInt()   // مساحة إجبارية دايمًا
     private val girl = GirlView(svc, land, zoneW)
     private lateinit var content: FrameLayout
 

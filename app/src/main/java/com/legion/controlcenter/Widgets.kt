@@ -184,9 +184,26 @@ class GirlView(ctx: Context, private val land: Boolean, private val zoneW: Int =
     fun restore() { sx = prefs.getFloat("girl_sx", 1f); sy = prefs.getFloat("girl_sy", 1f); dx = prefs.getFloat("girl_dx", 0f); dy = prefs.getFloat("girl_dy", 0f); invalidate() }
     fun reset() { sx = 1f; sy = 1f; dx = 0f; dy = 0f; save(); invalidate() }
 
+    private val dash = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE; strokeWidth = context.dpf(1.5f); color = Color.parseColor("#88FF5A64")
+        pathEffect = DashPathEffect(floatArrayOf(context.dpf(8f), context.dpf(6f)), 0f)
+    }
+    private val hint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#AAFFB0B6"); textAlign = Paint.Align.CENTER; textSize = context.dpf(14f) }
+
     override fun onDraw(c: Canvas) {
-        val b = bmp ?: return
         val vw = width.toFloat(); val vh = height.toFloat()
+        val b = bmp
+        if (b == null) {
+            // مكان فاضي محجوز للصورة
+            val p = context.dpf(10f)
+            d.set(p, vh * 0.3f, zoneW.toFloat() - p, vh - context.dpf(24f))
+            if (d.width() > 40f) {
+                c.drawRoundRect(d, context.dpf(18f), context.dpf(18f), dash)
+                c.drawText("مساحة الصورة", d.centerX(), d.centerY() - context.dpf(6f), hint)
+                c.drawText("اضغط \"تخصيص\"", d.centerX(), d.centerY() + context.dpf(16f), hint)
+            }
+            return
+        }
         val ar = b.width.toFloat() / b.height
         var w0 = if (zoneW > 0) zoneW.toFloat() else vw * 0.3f
         var h0 = w0 / ar
