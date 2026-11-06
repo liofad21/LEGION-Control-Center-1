@@ -131,6 +131,18 @@ class MainActivity : Activity() {
         }, 8, d(44))
         col.put(ai, 14)
 
+        // ---- الشخصية ----
+        val gc = card()
+        gc.addView(tv("شخصية اللوحة", 16f, true))
+        gc.put(tv("غيّر الشخصية اللي على الشمال: اختار صورة PNG من غير خلفية (شفافة). بعدها افتح اللوحة واضغط \"تعديل الشخصية\" عشان تكبّرها وتحرّكها.", 13f, false, Ui.TEXT_DIM), 6)
+        gc.put(action("اختيار صورة جديدة") { pickGirl() }, 10, d(44))
+        gc.put(action("الرجوع للشخصية الأصلية", false) {
+            java.io.File(filesDir, "girl_custom.png").delete()
+            prefs.edit().remove("girl_scale").remove("girl_dx").remove("girl_dy").apply()
+            Toast.makeText(this, "رجعت الشخصية الأصلية", Toast.LENGTH_SHORT).show()
+        }, 8, d(44))
+        col.put(gc, 14)
+
         // ---- الصلاحيات ----
         col.put(tv("الصلاحيات", 18f, true), 18)
         col.put(step("1) إمكانية الوصول", "أهم خطوة: بتعرض اللوحة فوق النظام وبتدوس على أزرار النظام وبتاخد اللقطة. على أندرويد 13+ لو الصلاحية رمادية افتح معلومات التطبيق ← النقط التلاتة ← \"السماح بالإعدادات المقيّدة\".",
@@ -187,7 +199,39 @@ class MainActivity : Activity() {
         wrap.addView(col, FrameLayout.LayoutParams(minOf(d(620), resources.displayMetrics.widthPixels), -2, Gravity.CENTER_HORIZONTAL))
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED)
             requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO, Manifest.permission.POST_NOTIFICATIONS), 1)
+        if (intent?.getBooleanExtra("pick_girl", false) == true) { intent.removeExtra("pick_girl"); pickGirl() }
         setContentView(ScrollView(this).apply { setBackgroundColor(Color.BLACK); addView(wrap) })
+    }
+
+    private fun pickGirl() {
+        startActivityForResult(Intent(Intent.ACTION_GET_CONTENT).setType("image/*").addCategory(Intent.CATEGORY_OPENABLE), 41)
+    }
+
+    override fun onActivityResult(req: Int, res: Int, data: Intent?) {
+        super.onActivityResult(req, res, data)
+        if (req != 41 || res != RESULT_OK) return
+        val uri = data?.data ?: return
+        try {
+            val opts = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            contentResolver.openInputStream(uri)?.use { android.graphics.BitmapFactory.decodeStream(it, null, opts) }
+            var sample = 1
+            while (maxOf(opts.outWidth, opts.outHeight) / sample > 2400) sample *= 2
+            val bmp = contentResolver.openInputStream(uri)?.use {
+                android.graphics.BitmapFactory.decodeStream(it, null, android.graphics.BitmapFactory.Options().apply { inSampleSize = sample })
+            }
+            if (bmp == null) { Toast.makeText(this, "مقدرتش أقرا الصورة", Toast.LENGTH_LONG).show(); return }
+            // لازم تكون شفافة: نفحص الأركان وحواف الصورة
+            var transparent = 0; var total = 0
+            val w = bmp.width; val h = bmp.height
+            val xs = intArrayOf(0, w / 2, w - 1); val ys = intArrayOf(0, h / 2, h - 1)
+            for (x in xs) for (y in ys) { total++; if (android.graphics.Color.alpha(bmp.getPixel(x, y)) < 40) transparent++ }
+            if (!bmp.hasAlpha() || transparent < 3) {
+                Toast.makeText(this, "الصورة لازم تكون من غير خلفية (PNG شفاف). امسح الخلفية الأول وجرّب تاني.", Toast.LENGTH_LONG).show(); return
+            }
+            java.io.FileOutputStream(java.io.File(filesDir, "girl_custom.png")).use { bmp.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+            prefs.edit().remove("girl_scale").remove("girl_dx").remove("girl_dy").apply()
+            Toast.makeText(this, "تم. افتح اللوحة وعدّل المكان والحجم.", Toast.LENGTH_LONG).show()
+        } catch (e: Exception) { Toast.makeText(this, "فشل: ${e.message}", Toast.LENGTH_LONG).show() }
     }
 
     private fun startWake() {

@@ -158,17 +158,37 @@ class BgView(ctx: Context, private val left: Int) : View(ctx) {
 }
 
 /** البنت (خلفية شفافة) مرسومة فوق كل حاجة وبتظهر كلها من فوق لتحت. مبتاخدش لمس. */
-class GirlView(ctx: Context) : View(ctx) {
-    private val bmp = Glyphs.get(ctx, R.drawable.girl)
+class GirlView(ctx: Context, private val land: Boolean) : View(ctx) {
+    private val prefs = ctx.getSharedPreferences("legion", Context.MODE_PRIVATE)
+    private var bmp: Bitmap = loadBmp()
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
     private val d = RectF()
+    var scale = prefs.getFloat("girl_scale", 1f)
+    var dx = prefs.getFloat("girl_dx", 0f)      // نسبة من عرض الشاشة
+    var dy = prefs.getFloat("girl_dy", 0f)      // نسبة من طول الشاشة
     init { isClickable = false; isFocusable = false }
-    /** عرضها بالبكسل لو رسمناها بطول الشاشة كله. */
-    fun widthFor(h: Int): Int = (h * bmp.width.toFloat() / bmp.height).toInt()
-    fun heightFor(w: Int): Int = (w * bmp.height.toFloat() / bmp.width).toInt()
+
+    private fun loadBmp(): Bitmap {
+        try {
+            val f = java.io.File(context.filesDir, "girl_custom.png")
+            if (f.exists()) android.graphics.BitmapFactory.decodeFile(f.absolutePath)?.let { return it }
+        } catch (_: Throwable) {}
+        return Glyphs.get(context, R.drawable.girl)
+    }
+
+    private fun aspect() = bmp.height.toFloat() / bmp.width
+    /** العرض الافتراضي للشخصية (بيحدد مكان اللوحة). */
+    fun defaultWidth(w: Int, h: Int): Int = if (land) (h / aspect()).toInt() else (w * 0.44f).toInt()
+
+    fun save() { prefs.edit().putFloat("girl_scale", scale).putFloat("girl_dx", dx).putFloat("girl_dy", dy).apply() }
+    fun reset() { scale = 1f; dx = 0f; dy = 0f; save(); invalidate() }
+
     override fun onDraw(c: Canvas) {
-        val h = height.toFloat(); val w = h * bmp.width / bmp.height
-        d.set(0f, 0f, w, h)
+        val vw = width.toFloat(); val vh = height.toFloat()
+        val w0 = defaultWidth(width, height).toFloat(); val h0 = w0 * aspect()
+        val w = w0 * scale; val h = h0 * scale
+        val left = dx * vw; val bottom = vh + dy * vh
+        d.set(left, bottom - h, left + w, bottom)
         c.drawBitmap(bmp, null, d, paint)
     }
     override fun onTouchEvent(e: MotionEvent): Boolean = false

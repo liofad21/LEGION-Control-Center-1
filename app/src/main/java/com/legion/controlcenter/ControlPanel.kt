@@ -152,13 +152,13 @@ class ControlPanel(
     }
 
     // ---------- الشخصية والخلفية ----------
-    private val girl = GirlView(svc)
+    private val girl = GirlView(svc, land)
     private lateinit var content: FrameLayout
 
     init {
         layoutDirection = LAYOUT_DIRECTION_LTR
         isClickable = true
-        val girlW = if (land) girl.widthFor(dm.heightPixels) else (dm.widthPixels * 0.40f).toInt()
+        val girlW = girl.defaultWidth(dm.widthPixels, dm.heightPixels)
         val areaLeft = if (land) (girlW * 0.8f).toInt() else girlW
         val areaW = dm.widthPixels - areaLeft
         val k = dm.widthPixels / 2172f
@@ -194,8 +194,7 @@ class ControlPanel(
         }
 
         // البنت فوق كل حاجة (بتظهر كاملة من الراس للرجلين في الوضع العرضي)
-        if (land) addView(girl, LayoutParams(girlW, -1, Gravity.START))
-        else addView(girl, LayoutParams(girlW, minOf(girl.heightFor(girlW), dm.heightPixels), Gravity.START or Gravity.BOTTOM))
+        addView(girl, LayoutParams(-1, -1))
 
         refreshers.forEach { try { it() } catch (_: Exception) {} }
         slowRefreshers.forEach { try { it() } catch (_: Exception) {} }
@@ -206,12 +205,59 @@ class ControlPanel(
         }
     }
 
+    // ================= تعديل الشخصية: سحب لتحريك وبإصبعين تكبير/تصغير =================
+    private var editLayer: View? = null
+    private fun startGirlEdit() {
+        if (editLayer != null) return
+        val layer = FrameLayout(svc)
+        val scaleDet = android.view.ScaleGestureDetector(svc, object : android.view.ScaleGestureDetector.SimpleOnScaleGestureListener() {
+            override fun onScale(det: android.view.ScaleGestureDetector): Boolean {
+                girl.scale = (girl.scale * det.scaleFactor).coerceIn(0.3f, 3.5f); girl.invalidate(); return true
+            }
+        })
+        var lx = 0f; var ly = 0f
+        layer.setOnTouchListener { _, e ->
+            scaleDet.onTouchEvent(e)
+            when (e.actionMasked) {
+                MotionEvent.ACTION_DOWN, MotionEvent.ACTION_POINTER_UP, MotionEvent.ACTION_POINTER_DOWN -> {
+                    val i = if (e.actionMasked == MotionEvent.ACTION_POINTER_UP) (if (e.actionIndex == 0) 1 else 0) else 0
+                    lx = e.getX(i); ly = e.getY(i)
+                }
+                MotionEvent.ACTION_MOVE -> if (e.pointerCount == 1 && !scaleDet.isInProgress) {
+                    girl.dx += (e.x - lx) / width; girl.dy += (e.y - ly) / height
+                    lx = e.x; ly = e.y; girl.invalidate()
+                } else if (e.pointerCount > 1) { lx = e.getX(0); ly = e.getY(0) }
+            }
+            true
+        }
+        val hint = tv("اسحب الشخصية لتحريكها • بإصبعين كبّرها أو صغّرها", 14f).apply { gravity = Gravity.CENTER; background = Ui.glass(svc, 14f, true); setPadding(d(14), d(8), d(14), d(8)) }
+        layer.addView(hint, FrameLayout.LayoutParams(-2, -2, Gravity.TOP or Gravity.CENTER_HORIZONTAL).apply { topMargin = d(90) })
+        val row = LinearLayout(svc).apply { background = Ui.glass(svc, 18f, true); setPadding(d(8), d(8), d(8), d(8)) }
+        fun b(t: String, on: Boolean, f: () -> Unit) = row.addView(GlassButton(svc, GlassButton.Shape.PILL, null, t).apply { this.on = on; setOnClickListener { f() } },
+            LinearLayout.LayoutParams(d(110), d(42)).apply { marginStart = d(4); marginEnd = d(4) })
+        fun end() { removeView(layer); editLayer = null }
+        b("حفظ", true) { girl.save(); end() }
+        b("إعادة ضبط", false) { girl.reset() }
+        b("تغيير الصورة", false) {
+            end(); onClose()
+            try { svc.startActivity(Intent(svc, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK).putExtra("pick_girl", true)) } catch (_: Exception) {}
+        }
+        b("إلغاء", false) { girl.scale = svc.dev.prefs.getFloat("girl_scale", 1f); girl.dx = svc.dev.prefs.getFloat("girl_dx", 0f); girl.dy = svc.dev.prefs.getFloat("girl_dy", 0f); girl.invalidate(); end() }
+        layer.addView(row, FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply { bottomMargin = d(40) })
+        editLayer = layer
+        addView(layer, LayoutParams(-1, -1))
+        girl.bringToFront(); layer.bringToFront()
+        // الطبقة فوق الشخصية بس شفافة، فالشخصية ظاهرة
+    }
+
     // ================= الهيدر: ساعة وتاريخ وحالة =================
     private fun buildHeader(leftPad: Int, topH: Int) {
         val clock = tv("", 36f, false).apply { typeface = Typeface.create("sans-serif-light", Typeface.NORMAL); setShadowLayer(d(6).toFloat(), 0f, 0f, Color.parseColor("#88FF2A3A")) }
         val date = tv("", 14.5f, false, Color.parseColor("#FFF1E4E4"))
         val col = LinearLayout(svc).apply { orientation = LinearLayout.VERTICAL; addView(clock); addView(date.apply { setPadding(0, d(2), 0, 0) }) }
-        content.addView(col, LayoutParams(-2, -2).apply { leftMargin = leftPad; topMargin = d(8) })
+        val editBtn = GlassButton(svc, GlassButton.Shape.PILL, null, "تعديل الشخصية").apply { setOnClickListener { startGirlEdit() } }
+        col.addView(editBtn, LinearLayout.LayoutParams(d(120), d(32)).apply { topMargin = d(6) })
+        this@ControlPanel.addView(col, LayoutParams(-2, -2).apply { leftMargin = d(16); topMargin = d(8) })
         val tf = SimpleDateFormat("HH:mm", Locale.US)
         val df = SimpleDateFormat("EEEE، d MMMM yyyy", Locale.forLanguageTag("ar-u-nu-latn"))
         refreshers += { val now = Date(); clock.text = tf.format(now); date.text = df.format(now) }
